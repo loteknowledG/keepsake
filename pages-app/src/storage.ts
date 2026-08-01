@@ -2,12 +2,35 @@ import initSqlJs, { type Database } from "sql.js";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import type { Bookmark } from "./Page";
 
+export type StorageMode = "opfs" | "indexeddb";
+type KeepsakeData = { bookmarks: Bookmark[]; collections: string[]; mode: StorageMode };
+
 const IDB_NAME = "keepsake-sqlite";
 const STORE_NAME = "database";
 const DATABASE_KEY = "keepsake.db";
 
-let database: Database | null = null;
+let fallbackDatabase: Database | null = null;
+let storageMode: StorageMode = "indexeddb";
 let writeQueue: Promise<void> = Promise.resolve();
+let requestId = 0;
+const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>();
+
+const worker = new Worker(new URL("./sqlite-worker.ts", import.meta.url), { type: "module" });
+worker.onmessage = (event: MessageEvent<{ id: number; ok: boolean; result?: unknown; error?: string }>) => {
+  const callback = pending.get(event.data.id);
+  if (!callback) return;
+  pending.delete(event.data.id);
+  if (event.data.ok) callback.resolve(event.data.result);
+  else callback.reject(new Error(event.data.error ?? "SQLite worker failed"));
+};
+
+function callWorker<T>(type: "init" | "save", payload?: unknown): Promise<T> {
+  const id = ++requestId;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
+    worker.postMessage({ id, type, payload });
+  });
+}
 
 function openIndexedDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -43,59 +66,65 @@ function rows<T>(result: ReturnType<Database["exec"]>): T[] {
   return values.map((value) => Object.fromEntries(columns.map((column, index) => [column, value[index]])) as T);
 }
 
-export async function openKeepsakeDatabase() {
+async function openIndexedDbFallback(): Promise<KeepsakeData> {
   const SQL = await initSqlJs({ locateFile: () => wasmUrl });
   const bytes = await readDatabaseBytes();
-  database = bytes ? new SQL.Database(bytes) : new SQL.Database();
-  database.run(`
-    CREATE TABLE IF NOT EXISTS collections (
-      name TEXT PRIMARY KEY,
-      position INTEGER NOT NULL
-    );
+  fallbackDatabase = bytes ? new SQL.Database(bytes) : new SQL.Database();
+  fallbackDatabase.run(`
+    CREATE TABLE IF NOT EXISTS collections (name TEXT PRIMARY KEY, position INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS bookmarks (
-      id INTEGER PRIMARY KEY,
-      url TEXT NOT NULL UNIQUE,
-      domain TEXT NOT NULL,
-      title TEXT NOT NULL,
-      note TEXT NOT NULL,
-      collection TEXT NOT NULL,
-      palette TEXT NOT NULL,
-      mark TEXT NOT NULL,
-      favorite INTEGER NOT NULL DEFAULT 0,
-      image TEXT
+      id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, domain TEXT NOT NULL, title TEXT NOT NULL,
+      note TEXT NOT NULL, collection TEXT NOT NULL, palette TEXT NOT NULL, mark TEXT NOT NULL,
+      favorite INTEGER NOT NULL DEFAULT 0, image TEXT
     );
   `);
-  return loadKeepsakeData();
+  return loadFallbackData();
 }
 
-export function loadKeepsakeData(): { bookmarks: Bookmark[]; collections: string[] } {
-  if (!database) return { bookmarks: [], collections: [] };
-  const bookmarks = rows<Record<string, string | number | null>>(database.exec("SELECT * FROM bookmarks ORDER BY id"))
+function loadFallbackData(): KeepsakeData {
+  if (!fallbackDatabase) return { bookmarks: [], collections: [], mode: "indexeddb" };
+  const bookmarks = rows<Record<string, string | number | null>>(fallbackDatabase.exec("SELECT * FROM bookmarks ORDER BY id"))
     .map((row) => ({
       id: Number(row.id), url: String(row.url), domain: String(row.domain), title: String(row.title),
       note: String(row.note), collection: String(row.collection), palette: String(row.palette), mark: String(row.mark),
       favorite: Boolean(row.favorite), image: row.image ? String(row.image) : undefined,
     }));
-  const collections = rows<{ name: string }>(database.exec("SELECT name FROM collections ORDER BY position")).map((row) => row.name);
-  return { bookmarks, collections };
+  const collections = rows<{ name: string }>(fallbackDatabase.exec("SELECT name FROM collections ORDER BY position")).map((row) => row.name);
+  return { bookmarks, collections, mode: "indexeddb" };
+}
+
+export async function openKeepsakeDatabase(): Promise<KeepsakeData> {
+  try {
+    const data = await callWorker<Omit<KeepsakeData, "mode">>("init");
+    storageMode = "opfs";
+    return { ...data, mode: "opfs" };
+  } catch (error) {
+    console.warn("OPFS unavailable; using the IndexedDB SQLite fallback.", error);
+    storageMode = "indexeddb";
+    return openIndexedDbFallback();
+  }
 }
 
 export function saveKeepsakeData(bookmarks: Bookmark[], collections: string[]): Promise<void> {
   writeQueue = writeQueue.then(async () => {
-    if (!database) return;
-    database.run("BEGIN");
+    if (storageMode === "opfs") {
+      await callWorker("save", { bookmarks, collections });
+      return;
+    }
+    if (!fallbackDatabase) return;
+    fallbackDatabase.run("BEGIN");
     try {
-      database.run("DELETE FROM bookmarks");
-      database.run("DELETE FROM collections");
-      collections.forEach((name, position) => database!.run("INSERT INTO collections(name, position) VALUES (?, ?)", [name, position]));
-      bookmarks.forEach((item) => database!.run(
+      fallbackDatabase.run("DELETE FROM bookmarks");
+      fallbackDatabase.run("DELETE FROM collections");
+      collections.forEach((name, position) => fallbackDatabase!.run("INSERT INTO collections(name, position) VALUES (?, ?)", [name, position]));
+      bookmarks.forEach((item) => fallbackDatabase!.run(
         "INSERT INTO bookmarks(id,url,domain,title,note,collection,palette,mark,favorite,image) VALUES (?,?,?,?,?,?,?,?,?,?)",
         [item.id, item.url, item.domain, item.title, item.note, item.collection, item.palette, item.mark, item.favorite ? 1 : 0, item.image ?? null],
       ));
-      database.run("COMMIT");
-      await writeDatabaseBytes(database.export());
+      fallbackDatabase.run("COMMIT");
+      await writeDatabaseBytes(fallbackDatabase.export());
     } catch (error) {
-      database.run("ROLLBACK");
+      fallbackDatabase.run("ROLLBACK");
       throw error;
     }
   });
