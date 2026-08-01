@@ -140,23 +140,17 @@ export default function Home() {
     setNotice("Building a verified Load…");
     try {
       const created = await createLoad(bookmark);
-      if (navigator.canShare?.({ files: [created.file] })) {
-        await navigator.share({ files: [created.file], title: bookmark.title, text: "Shared from Keepseek through MUTHURLOAD." });
-        setNotice(`Shared ${created.fileName}.`);
-      } else {
-        const downloadUrl = URL.createObjectURL(created.file);
-        const link = document.createElement("a");
-        link.href = downloadUrl;
-        link.download = created.fileName;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
-        setNotice(`${created.fileName} is ready to swap.`);
-      }
+      const downloadUrl = URL.createObjectURL(created.file);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = created.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
+      setNotice(`${created.fileName} is ready to swap.`);
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") setNotice("Load sharing cancelled.");
-      else setNotice(error instanceof Error ? error.message : "Keepseek could not create that Load.");
+      setNotice(error instanceof Error ? error.message : "Keepseek could not create that Load.");
     } finally {
       setCreatingLoad(null);
     }
@@ -304,7 +298,7 @@ export default function Home() {
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3><a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a></h3>
                 <p className="note">“{bookmark.note}”</p>
-                <div className="card-footer"><span className="tag">{bookmark.collection}</span><button className="load-action" onClick={() => shareLoad(bookmark)} disabled={creatingLoad === bookmark.id}>{creatingLoad === bookmark.id ? "Making…" : "⇧ Share Load"}</button></div>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><button className="load-action" onClick={() => shareLoad(bookmark)} disabled={creatingLoad === bookmark.id}>{creatingLoad === bookmark.id ? "Making…" : "⇩ Create Load"}</button></div>
               </div>
             </article>
           ))}
