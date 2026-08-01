@@ -32,7 +32,11 @@ function metadataFor(rawUrl: string) {
   const domain = parsed.hostname.replace(/^www\./, "");
   const slug = parsed.pathname.split("/").filter(Boolean).pop()?.replace(/[-_]/g, " ");
   const title = slug ? slug.replace(/\b\w/g, (c) => c.toUpperCase()) : `Something worth keeping from ${domain}`;
-  return { normalized, domain, title, mark: domain.slice(0, 2).toUpperCase() };
+  const rawName = domain.split(".")[0].replace(/[-_]+/g, " ");
+  const siteName = /keepsake|keepseek/i.test(rawName)
+    ? "Keepseek"
+    : rawName.replace(/\b\w/g, (character) => character.toUpperCase()).slice(0, 18);
+  return { normalized, domain, title, mark: siteName };
 }
 
 export default function Home() {
@@ -127,8 +131,8 @@ export default function Home() {
 
   function exportBookmarks() {
     const payload = JSON.stringify({
-      app: "Keepsake",
-      version: 1,
+      app: "Keepseek",
+      version: 2,
       exportedAt: new Date().toISOString(),
       collections: userCollections,
       bookmarks,
@@ -137,9 +141,9 @@ export default function Home() {
     const downloadUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = downloadUrl;
-    link.download = `keepsake-${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `keepseek-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(link);
-    setNotice("Your Keepsake JSON is ready.");
+    setNotice("Your Keepseek JSON is ready.");
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
@@ -151,13 +155,13 @@ export default function Home() {
     try {
       const data = JSON.parse(await file.text());
       const incoming = Array.isArray(data) ? data : data.bookmarks;
-      if (!Array.isArray(incoming)) throw new Error("Invalid Keepsake file");
+      if (!Array.isArray(incoming)) throw new Error("Invalid Keepseek file");
       const valid = incoming.filter((item: Partial<Bookmark>) =>
         item && typeof item.url === "string" && typeof item.title === "string" && typeof item.domain === "string"
       ).map((item: Bookmark, index: number) => ({
         ...item,
         id: typeof item.id === "number" ? item.id : Date.now() + index,
-        note: typeof item.note === "string" ? item.note : "Imported into Keepsake.",
+        note: typeof item.note === "string" ? item.note : "Imported into Keepseek.",
         collection: typeof item.collection === "string" ? item.collection : "Reading",
         palette: typeof item.palette === "string" ? item.palette : "sunset",
         mark: typeof item.mark === "string" ? item.mark : item.domain.slice(0, 2).toUpperCase(),
@@ -175,7 +179,7 @@ export default function Home() {
       }
       setNotice(`Imported ${valid.length} ${valid.length === 1 ? "bookmark" : "bookmarks"}.`);
     } catch {
-      setNotice("That file isn’t a valid Keepsake JSON export.");
+      setNotice("That file isn’t a valid Keepseek or Keepsake JSON export.");
     } finally {
       event.target.value = "";
     }
@@ -198,14 +202,14 @@ export default function Home() {
   return (
     <main>
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Keepsake home">Keepsake</a>
+        <a className="brand" href="#top" aria-label="Keepseek home">Keepseek</a>
         <nav aria-label="Primary navigation"><a href="#scraps">Library</a><a href="#scraps">Collections</a><a href="#about">Highlights</a></nav>
         <button className="avatar" aria-label="Open profile">QL</button>
       </header>
 
       <section className="hero" id="top">
-        <h1>Keep the internet<br/>worth <em>remembering.</em></h1>
-        <p className="intro">Keepsake automatically saves title, images, links, and metadata<br className="desktop-break"/> so you can find it again—and add your own notes.</p>
+        <h1>Keep what matters,<br/>then <em>seek it again.</em></h1>
+        <p className="intro">Keepseek automatically saves title, images, links, and metadata<br className="desktop-break"/> so you can find it again—and add your own notes.</p>
         <div className="capture-row">
           <button className="primary" onClick={() => setOpen(true)}><span>＋</span> Add a bookmark</button>
           <label className="search"><span>⌕</span><input id="keepsake-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your saved world" /><kbd>⌘ K</kbd></label>
@@ -231,7 +235,7 @@ export default function Home() {
         <div className="card-grid">
           {visible.map((bookmark, index) => (
             <article className={`bookmark-card tilt-${index % 4}`} key={bookmark.id}>
-              <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined} aria-label={`Open ${bookmark.title}`}><span className={bookmark.image ? "visually-hidden" : ""}>{bookmark.mark}</span></a>
+              <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined} aria-label={`Open ${bookmark.title}`}><span className={bookmark.image ? "visually-hidden" : ""}>{/keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark}</span></a>
               <div className="card-body">
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3><a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a></h3>
@@ -246,7 +250,7 @@ export default function Home() {
 
       <section className="how" id="about"><p className="kicker">THE QUIET MAGIC</p><h2>Paste. Pause. Remember.</h2><div className="steps"><div><b>01</b><h3>Drop a link</h3><p>Any article, product, video, or corner of the web.</p></div><div><b>02</b><h3>We gather the pieces</h3><p>Title, image, description, and source appear automatically.</p></div><div><b>03</b><h3>Add what matters</h3><p>Leave a thought in your own words and find it later.</p></div></div></section>
 
-      <footer><span className="brand">Keepsake</span><p>Made for curious minds and gloriously open tabs.</p></footer>
+      <footer><span className="brand">Keepseek</span><p>Made for curious minds and gloriously open tabs.</p></footer>
 
       {notice && <div className="toast" role="status"><span>✓</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
 
