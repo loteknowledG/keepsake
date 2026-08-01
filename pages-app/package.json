@@ -8,15 +8,15 @@
     "build": "tsc --noEmit && vite build"
   },
   "dependencies": {
+    "@sqlite.org/sqlite-wasm": "^3.53.0-build1",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/sql.js": "latest",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
     "react": "latest",
     "react-dom": "latest",
     "sql.js": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@types/sql.js": "latest"
-  },
-  "devDependencies": {}
+    "typescript": "latest",
+    "vite": "latest"
+  }
 }
