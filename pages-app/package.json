@@ -13,8 +13,10 @@
     "typescript": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "sql.js": "latest",
     "@types/react": "latest",
-    "@types/react-dom": "latest"
+    "@types/react-dom": "latest",
+    "@types/sql.js": "latest"
   },
   "devDependencies": {}
 }
