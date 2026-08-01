@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, type StorageMode } from "./storage";
+import { createLoad, openLoad, type OpenedLoad } from "./load-format";
 
 export type Bookmark = {
   id: number;
@@ -56,7 +57,10 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [newCollection, setNewCollection] = useState("");
+  const [loadPreview, setLoadPreview] = useState<OpenedLoad | null>(null);
+  const [creatingLoad, setCreatingLoad] = useState<number | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const loadRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     openKeepsakeDatabase().then(async (stored) => {
@@ -129,6 +133,62 @@ export default function Home() {
 
   function toggleFavorite(id: number) {
     setBookmarks((items) => items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item));
+  }
+
+  async function shareLoad(bookmark: Bookmark) {
+    setCreatingLoad(bookmark.id);
+    setNotice("Building a verified Load…");
+    try {
+      const created = await createLoad(bookmark);
+      if (navigator.canShare?.({ files: [created.file] })) {
+        await navigator.share({ files: [created.file], title: bookmark.title, text: "Shared from Keepseek through MUTHURLOAD." });
+        setNotice(`Shared ${created.fileName}.`);
+      } else {
+        const downloadUrl = URL.createObjectURL(created.file);
+        const link = document.createElement("a");
+        link.href = downloadUrl;
+        link.download = created.fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
+        setNotice(`${created.fileName} is ready to swap.`);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") setNotice("Load sharing cancelled.");
+      else setNotice(error instanceof Error ? error.message : "Keepseek could not create that Load.");
+    } finally {
+      setCreatingLoad(null);
+    }
+  }
+
+  async function inspectLoad(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setNotice("Verifying Load integrity…");
+      setLoadPreview(await openLoad(file));
+      setNotice("Load verified. Preview before taking it.");
+    } catch (error) {
+      setLoadPreview(null);
+      setNotice(error instanceof Error ? error.message : "That file is not a valid Load.");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function takeLoad() {
+    if (!loadPreview) return;
+    const incoming = { ...loadPreview.bookmark, id: Date.now() };
+    setBookmarks((current) => {
+      const byUrl = new Map(current.map((item) => [item.url, item]));
+      byUrl.set(incoming.url, incoming);
+      return Array.from(byUrl.values());
+    });
+    setUserCollections((current) => current.includes(incoming.collection) ? current : [...current, incoming.collection]);
+    setActive(incoming.collection);
+    setLoadPreview(null);
+    setNotice(`Took ${loadPreview.fileName} into Keepseek.`);
   }
 
   function exportBookmarks() {
@@ -224,9 +284,11 @@ export default function Home() {
           <div><h2>◷ &nbsp;Recently kept</h2></div>
           <div className="data-actions">
             <span className="local-pill"><i /> {storageReady ? storageMode === "opfs" ? "SQLite · OPFS file" : "SQLite · IndexedDB fallback" : "Starting SQLite…"}</span>
+            <button className="open-load" onClick={() => loadRef.current?.click()}>⌁ Open Load</button>
             <button onClick={() => importRef.current?.click()}>⇧ Import JSON</button>
             <button onClick={exportBookmarks}>⇩ Export JSON</button>
             <input ref={importRef} onChange={importBookmarks} type="file" accept="application/json,.json" hidden />
+            <input ref={loadRef} onChange={inspectLoad} type="file" accept=".load,application/zip,application/vnd.keepseek.muthurload+zip" hidden />
             <span className="scrap-count">{visible.length} {visible.length === 1 ? "scrap" : "scraps"}</span>
           </div>
         </div>
@@ -242,7 +304,7 @@ export default function Home() {
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3><a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a></h3>
                 <p className="note">“{bookmark.note}”</p>
-                <span className="tag">{bookmark.collection}</span>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><button className="load-action" onClick={() => shareLoad(bookmark)} disabled={creatingLoad === bookmark.id}>{creatingLoad === bookmark.id ? "Making…" : "⇧ Share Load"}</button></div>
               </div>
             </article>
           ))}
@@ -281,6 +343,18 @@ export default function Home() {
             <label>Collection name<input autoFocus value={newCollection} onChange={(e) => setNewCollection(e.target.value)} placeholder="e.g. Cyberdeck ideas" maxLength={40} required /></label>
             <button className="primary wide" type="submit">Create collection <span>→</span></button>
           </form>
+        </div>
+      </div>}
+
+      {loadPreview && <div className="modal-backdrop load-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setLoadPreview(null)}>
+        <div className="modal load-modal" role="dialog" aria-modal="true" aria-labelledby="load-title">
+          <button className="close" onClick={() => setLoadPreview(null)} aria-label="Close">×</button>
+          <span className="modal-icon load-icon">◉</span><p className="kicker">VERIFIED MUTHURLOAD</p><h2 id="load-title">{loadPreview.bookmark.title}</h2>
+          <p>Open without importing, inspect its lineage, then decide whether to Take Load.</p>
+          <div className="load-proof"><div><small>ROOT HASH</small><code>{loadPreview.manifest.hashing.root.slice(0, 20)}…</code></div><span>SHA-256 ✓</span></div>
+          <dl className="load-meta"><div><dt>Source</dt><dd>{loadPreview.bookmark.domain}</dd></div><div><dt>Format</dt><dd>MUTHURLOAD {loadPreview.manifest.version}</dd></div><div><dt>Compression</dt><dd>ZIP · Deflate 6</dd></div></dl>
+          {loadPreview.content && <pre className="load-content">{loadPreview.content.slice(0, 1_600)}</pre>}
+          <button className="primary wide" onClick={takeLoad}>Take Load <span>→</span></button>
         </div>
       </div>}
     </main>
