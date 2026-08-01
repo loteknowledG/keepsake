@@ -38,7 +38,7 @@ h1 em:after { content:""; position:absolute; height:9px; left:3%; right:1%; bott
 .bookmark-card:hover { transform:translateY(-7px) rotate(0)!important; box-shadow:10px 15px 0 rgba(23,23,19,.13); }
 .tilt-0 { transform:rotate(-1.2deg); }.tilt-1{transform:rotate(.8deg)}.tilt-2{transform:rotate(-.5deg)}.tilt-3{transform:rotate(1.25deg)}
 .art { aspect-ratio:4/3; margin:10px; border-radius:15px 18px 14px 17px; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:hidden; position:relative; border:1px solid rgba(23,23,19,.18); background-size:cover;background-position:center; }
-.art span { font-family:Georgia,serif; font-size:56px; font-weight:700; z-index:1; }
+.art span { font-family:Georgia,serif; font-size:clamp(26px,4vw,56px); font-weight:700; z-index:1; max-width:90%; text-align:center; overflow-wrap:anywhere; }
 .visually-hidden{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .sunset { background:radial-gradient(circle at 70% 30%,#ffdb58 0 15%,transparent 16%),linear-gradient(135deg,#ff805f 0 48%,#f4d9c4 49%); }
 .grid { background-color:#d7ebff; background-image:linear-gradient(#608caa55 1px,transparent 1px),linear-gradient(90deg,#608caa55 1px,transparent 1px); background-size:22px 22px; }
