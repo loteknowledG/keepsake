@@ -4,6 +4,8 @@ Status: architectural proposal for Keepseek
 
 Related doctrine: [The MUTHUR Manifesto](./THE-MUTHUR-MANIFESTO.md)
 
+Interchange format: [Keepseek `.load` Format Specification](./LOAD-FORMAT.md)
+
 ## Purpose
 
 Keepseek is local-first: a person's library belongs in their browser-side SQLite/OPFS database and is never uploaded merely because it was saved. MUTHURLOAD is the explicit sharing and transport layer for that local library.
