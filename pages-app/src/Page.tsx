@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { openKeepsakeDatabase, saveKeepsakeData } from "./storage";
+import { openKeepsakeDatabase, saveKeepsakeData, type StorageMode } from "./storage";
 
 export type Bookmark = {
   id: number;
@@ -44,6 +44,7 @@ export default function Home() {
   const [userCollections, setUserCollections] = useState<string[]>(defaultCollections);
   const [hydrated, setHydrated] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
+  const [storageMode, setStorageMode] = useState<StorageMode>("opfs");
   const [active, setActive] = useState("All scraps");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -65,6 +66,7 @@ export default function Home() {
       const nextCollections = stored.collections.length ? stored.collections : legacyCollections ? JSON.parse(legacyCollections) : defaultCollections;
       setBookmarks(nextBookmarks);
       setUserCollections(nextCollections);
+      setStorageMode(stored.mode);
       if (!stored.bookmarks.length) await saveKeepsakeData(nextBookmarks, nextCollections);
       if (legacyBookmarks || legacyCollections) {
         window.localStorage.removeItem("keepsake-bookmarks");
@@ -221,7 +223,7 @@ export default function Home() {
         <div className="library-head">
           <div><h2>◷ &nbsp;Recently kept</h2></div>
           <div className="data-actions">
-            <span className="local-pill"><i /> {storageReady ? "SQLite · stored in this browser" : "Starting SQLite…"}</span>
+            <span className="local-pill"><i /> {storageReady ? storageMode === "opfs" ? "SQLite · OPFS file" : "SQLite · IndexedDB fallback" : "Starting SQLite…"}</span>
             <button onClick={() => importRef.current?.click()}>⇧ Import JSON</button>
             <button onClick={exportBookmarks}>⇩ Export JSON</button>
             <input ref={importRef} onChange={importBookmarks} type="file" accept="application/json,.json" hidden />
