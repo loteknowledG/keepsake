@@ -1,8 +1,9 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { openKeepsakeDatabase, saveKeepsakeData } from "./storage";
 
-type Bookmark = {
+export type Bookmark = {
   id: number;
   url: string;
   domain: string;
@@ -38,6 +39,7 @@ export default function Home() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(starterBookmarks);
   const [userCollections, setUserCollections] = useState<string[]>(defaultCollections);
   const [hydrated, setHydrated] = useState(false);
+  const [storageReady, setStorageReady] = useState(false);
   const [active, setActive] = useState("All scraps");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -52,22 +54,30 @@ export default function Home() {
   const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("keepsake-bookmarks");
-    if (stored) setBookmarks(JSON.parse(stored));
-    const storedCollections = window.localStorage.getItem("keepsake-collections");
-    if (storedCollections) setUserCollections(JSON.parse(storedCollections));
-    setHydrated(true);
+    openKeepsakeDatabase().then(async (stored) => {
+      const legacyBookmarks = window.localStorage.getItem("keepsake-bookmarks");
+      const legacyCollections = window.localStorage.getItem("keepsake-collections");
+      const nextBookmarks = stored.bookmarks.length ? stored.bookmarks : legacyBookmarks ? JSON.parse(legacyBookmarks) : starterBookmarks;
+      const nextCollections = stored.collections.length ? stored.collections : legacyCollections ? JSON.parse(legacyCollections) : defaultCollections;
+      setBookmarks(nextBookmarks);
+      setUserCollections(nextCollections);
+      if (!stored.bookmarks.length) await saveKeepsakeData(nextBookmarks, nextCollections);
+      if (legacyBookmarks || legacyCollections) {
+        window.localStorage.removeItem("keepsake-bookmarks");
+        window.localStorage.removeItem("keepsake-collections");
+      }
+      setStorageReady(true);
+      setHydrated(true);
+    }).catch(() => {
+      setNotice("SQLite could not start in this browser. JSON export is still available.");
+      setHydrated(true);
+    });
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem("keepsake-bookmarks", JSON.stringify(bookmarks));
-  }, [bookmarks, hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    window.localStorage.setItem("keepsake-collections", JSON.stringify(userCollections));
-  }, [userCollections, hydrated]);
+    if (!hydrated || !storageReady) return;
+    saveKeepsakeData(bookmarks, userCollections).catch(() => setNotice("SQLite could not save that change. Export a JSON backup."));
+  }, [bookmarks, userCollections, hydrated, storageReady]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -207,7 +217,7 @@ export default function Home() {
         <div className="library-head">
           <div><h2>◷ &nbsp;Recently kept</h2></div>
           <div className="data-actions">
-            <span className="local-pill"><i /> Stored in this browser</span>
+            <span className="local-pill"><i /> {storageReady ? "SQLite · stored in this browser" : "Starting SQLite…"}</span>
             <button onClick={() => importRef.current?.click()}>⇧ Import JSON</button>
             <button onClick={exportBookmarks}>⇩ Export JSON</button>
             <input ref={importRef} onChange={importBookmarks} type="file" accept="application/json,.json" hidden />
