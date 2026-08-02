@@ -1,27 +1,55 @@
-# Keepseek `.load` Format Specification
+# MUTHUR Format Family and `.muthur.load` Specification
 
 Status: draft v0.1
 
 Protocol: MUTHURLOAD
 
-File extension: `.load`
+Canonical file extension: `.muthur.load`
+
+Legacy short extension: `.load`
 
 Media type: `application/vnd.keepseek.muthurload+zip`
 
 ## 1. Scope
 
-Version 0.1 defines the smallest complete MUTHURLOAD artifact that can travel between two Keepseek libraries. Its first reference artifact is `the-muthur-manifesto.load`.
+Version 0.1 defines the smallest complete MUTHURLOAD artifact that can travel between two Keepseek libraries or other compatible intelligences. Its first reference artifact is `the-muthur-manifesto.muthur.load`.
 
 The format is local-first. Creating, inspecting, hashing, compressing, and importing a Load happen on the user's device. Keepseek does not upload a Load unless the user explicitly shares it through another service.
 
+### 1.1 MUTHUR filename namespace
+
+MUTHUR uses a recognizable compound-extension namespace:
+
+| Extension | Role | Status |
+|---|---|---|
+| `.muthur.load` | Canonical inert knowledge capsule containing Drops, Wads, indexes, media, and provenance | Defined in v0.1 |
+| `.muthur.html` | Optional self-viewing HTML envelope that a browser can open without Keepseek | Reserved |
+| `.muthur.strand` | Signed transport, routing, permission, and synchronization description that carries or connects Loads | Reserved |
+| `.muthur.slime` | Portable snapshot or fragment of the linked intelligence graph formed among Loads and intelligences | Reserved |
+
+Examples:
+
+```text
+the-muthur-manifesto.muthur.load
+the-muthur-manifesto.muthur.html
+research-exchange.muthur.strand
+career-intelligence.muthur.slime
+```
+
+The filename is a human and operating-system hint. The internal manifest, declared media type, version, and verified cryptographic identity are authoritative. A reader MUST NOT infer trust or format validity from the filename alone.
+
+The `.load` short extension produced by early Keepseek builds remains a compatible legacy alias for `.muthur.load`. Writers SHOULD emit `.muthur.load`; readers SHOULD accept both during migration.
+
+All members of the MUTHUR format family are inert data. A `.muthur.html` file MAY execute only its browser-sandboxed viewer code; its embedded Load remains inert and independently verifiable.
+
 ## 2. Physical container
 
-A `.load` file is a ZIP-compatible binary container. The `.load` extension expresses its MUTHURLOAD identity; ordinary ZIP tools may still inspect its envelope.
+A `.muthur.load` file is a ZIP-compatible binary container. The compound extension expresses its MUTHURLOAD identity; ordinary ZIP tools may still inspect its envelope.
 
 The required logical layout for v0.1 is:
 
 ```text
-the-muthur-manifesto.load
+the-muthur-manifesto.muthur.load
 ├── manifest.json
 ├── indexes/
 │   └── root.json
@@ -90,7 +118,7 @@ Unknown fields MUST be ignored by compatible readers unless the manifest explici
 
 ## 6. First reference Load
 
-`the-muthur-manifesto.load` contains:
+`the-muthur-manifesto.muthur.load` contains:
 
 - the complete MUTHUR Manifesto Markdown;
 - the original GitHub URL as provenance;
@@ -129,4 +157,4 @@ The later vocabulary is reserved as:
 
 Later versions may add encryption, independently compressed seekable blocks, partial transfer, forum/thread indexes, content-addressed media objects, and Zstandard. None are required for the first interoperable Load.
 
-Version 0.1 succeeds when one Keepseek instance creates `the-muthur-manifesto.load`, another opens and verifies it, and the recipient can Take Load into its local library.
+Version 0.1 succeeds when one Keepseek instance creates `the-muthur-manifesto.muthur.load`, another opens and verifies it, and the recipient can Take Load into its local library.
