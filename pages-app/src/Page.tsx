@@ -62,6 +62,12 @@ export default function Home() {
   const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
   const [sharing, setSharing] = useState<"load" | "link" | null>(null);
   const [shareLink, setShareLink] = useState("");
+  const [editTarget, setEditTarget] = useState<Bookmark | null>(null);
+  const [editUrl, setEditUrl] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [editCollection, setEditCollection] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Bookmark | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const loadRef = useRef<HTMLInputElement>(null);
 
@@ -136,6 +142,45 @@ export default function Home() {
 
   function toggleFavorite(id: number) {
     setBookmarks((items) => items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item));
+  }
+
+  function startEdit(bookmark: Bookmark) {
+    setEditTarget(bookmark);
+    setEditUrl(bookmark.url);
+    setEditTitle(bookmark.title);
+    setEditNote(bookmark.note);
+    setEditCollection(bookmark.collection);
+  }
+
+  function saveEdit(event: FormEvent) {
+    event.preventDefault();
+    if (!editTarget) return;
+    try {
+      const metadata = metadataFor(editUrl);
+      const title = editTitle.trim();
+      if (!title) return;
+      setBookmarks((items) => items.map((item) => item.id === editTarget.id ? {
+        ...item,
+        url: metadata.normalized,
+        domain: metadata.domain,
+        mark: metadata.mark,
+        title,
+        note: editNote.trim() || "Saved for later.",
+        collection: editCollection,
+      } : item));
+      setEditTarget(null);
+      setNotice(`Updated ${title}.`);
+    } catch {
+      setNotice("Enter a valid website address.");
+    }
+  }
+
+  function deleteBookmark() {
+    if (!deleteTarget) return;
+    const title = deleteTarget.title;
+    setBookmarks((items) => items.filter((item) => item.id !== deleteTarget.id));
+    setDeleteTarget(null);
+    setNotice(`Deleted ${title}.`);
   }
 
   async function shareLoad(bookmark: Bookmark) {
@@ -331,7 +376,7 @@ export default function Home() {
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3><a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a></h3>
                 <p className="note">“{bookmark.note}”</p>
-                <div className="card-footer"><span className="tag">{bookmark.collection}</span><button className="load-action share-action" onClick={() => setShareTarget(bookmark)}>↗ Share</button></div>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><div className="card-actions"><button className="load-action" onClick={() => startEdit(bookmark)}>✎ Edit</button><button className="load-action delete-action" onClick={() => setDeleteTarget(bookmark)}>Delete</button><button className="load-action share-action" onClick={() => setShareTarget(bookmark)}>↗ Share</button></div></div>
               </div>
             </article>
           ))}
@@ -393,6 +438,29 @@ export default function Home() {
             <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "MUTHURLOAD"}</strong><span>Download the owned, offline `.muthur.load` file.</span></button>
             <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "MUTHUR LINK"}</strong><span>Create a zero-install browser link. Anyone with it can read this Load.</span></button>
           </div> : <div className="share-ready"><strong>MUTHUR LINK READY</strong><p>This public-by-possession link contains the complete verified Load.</p><a href={shareLink}>Open in MUTHUR <span>↗</span></a><button onClick={copyPreparedLink}>Copy Link</button></div>}
+        </div>
+      </div>}
+
+      {editTarget && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setEditTarget(null)}>
+        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
+          <button className="close" onClick={() => setEditTarget(null)} aria-label="Close">×</button>
+          <form onSubmit={saveEdit}>
+            <span className="modal-icon">✎</span><p className="kicker">EDIT SCRAP</p><h2 id="edit-title">Tune what you kept.</h2>
+            <label>Website URL<input autoFocus type="text" required value={editUrl} onChange={(e) => setEditUrl(e.target.value)} /></label>
+            <label>Title<input type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
+            <label>Your note<textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} /></label>
+            <label>Collection<select value={editCollection} onChange={(e) => setEditCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}</select></label>
+            <button className="primary wide" type="submit">Save changes <span>→</span></button>
+          </form>
+        </div>
+      </div>}
+
+      {deleteTarget && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setDeleteTarget(null)}>
+        <div className="modal delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-description">
+          <button className="close" onClick={() => setDeleteTarget(null)} aria-label="Close">×</button>
+          <span className="modal-icon delete-icon">×</span><p className="kicker">DELETE SCRAP</p><h2 id="delete-title">Let this one go?</h2>
+          <p id="delete-description"><strong>{deleteTarget.title}</strong> will be removed from this device. Exported Loads and JSON backups are not affected.</p>
+          <div className="delete-buttons"><button onClick={() => setDeleteTarget(null)}>Keep bookmark</button><button className="danger" onClick={deleteBookmark}>Delete bookmark</button></div>
         </div>
       </div>}
     </main>
