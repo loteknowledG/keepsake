@@ -2,10 +2,12 @@ import { unzipSync, zipSync, type Zippable } from "fflate";
 import type { Bookmark } from "./Page";
 
 export const LOAD_MEDIA_TYPE = "application/vnd.keepseek.muthurload+zip";
+export const MUTHUR_RENDERER_URL = "https://muthur-tawny.vercel.app/";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const MAX_EXPANDED_BYTES = 25 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 10 * 1024 * 1024;
+const MAX_EMBEDDED_LINK_BYTES = 128 * 1024;
 
 type LoadObject = {
   path: string;
@@ -100,8 +102,23 @@ export async function createLoad(bookmark: Bookmark) {
   entries["manifest.json"] = [jsonBytes(manifest), { level: 6 }];
 
   const archive = zipSync(entries, { level: 6 });
-  const fileName = `${safeName(bookmark.title)}.load`;
+  const fileName = `${safeName(bookmark.title)}.muthur.load`;
   return { fileName, manifest, file: new File([archive as BlobPart], fileName, { type: LOAD_MEDIA_TYPE }) };
+}
+
+function base64url(bytes: Uint8Array) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+export async function createMuthurLink(bookmark: Bookmark, rendererUrl = MUTHUR_RENDERER_URL) {
+  const created = await createLoad(bookmark);
+  const bytes = new Uint8Array(await created.file.arrayBuffer());
+  if (bytes.length > MAX_EMBEDDED_LINK_BYTES) throw new Error("This Load is too large for an embedded MUTHUR Link. Download and send the .muthur.load file instead.");
+  const url = new URL(rendererUrl);
+  url.hash = `load=${base64url(bytes)}&name=${encodeURIComponent(created.fileName)}`;
+  return { ...created, url: url.toString(), bytes: bytes.length };
 }
 
 function assertSafeEntries(entries: Record<string, Uint8Array>) {
