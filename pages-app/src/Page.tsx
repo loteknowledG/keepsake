@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, type StorageMode } from "./storage";
-import { createLoad, openLoad, type OpenedLoad } from "./load-format";
+import { createLoad, createMuthurLink, openLoad, type OpenedLoad } from "./load-format";
 
 export type Bookmark = {
   id: number;
@@ -59,6 +59,9 @@ export default function Home() {
   const [newCollection, setNewCollection] = useState("");
   const [loadPreview, setLoadPreview] = useState<OpenedLoad | null>(null);
   const [creatingLoad, setCreatingLoad] = useState<number | null>(null);
+  const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
+  const [sharing, setSharing] = useState<"load" | "link" | null>(null);
+  const [shareLink, setShareLink] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
   const loadRef = useRef<HTMLInputElement>(null);
 
@@ -136,6 +139,7 @@ export default function Home() {
   }
 
   async function shareLoad(bookmark: Bookmark) {
+    setSharing("load");
     setCreatingLoad(bookmark.id);
     setNotice("Building a verified Load…");
     try {
@@ -153,6 +157,35 @@ export default function Home() {
       setNotice(error instanceof Error ? error.message : "Keepseek could not create that Load.");
     } finally {
       setCreatingLoad(null);
+      setSharing(null);
+      closeShare();
+    }
+  }
+
+  function closeShare() { setShareTarget(null); setShareLink(""); }
+
+  async function prepareMuthurLink(bookmark: Bookmark) {
+    setSharing("link"); setNotice("Building an embedded MUTHUR Link…");
+    try {
+      const created = await createMuthurLink(bookmark);
+      setShareLink(created.url);
+      setNotice(`MUTHUR Link ready. Anyone with it can read this ${created.bytes.toLocaleString()}-byte Load.`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Keepseek could not create that MUTHUR Link."); }
+    finally { setSharing(null); }
+  }
+
+  async function copyPreparedLink() {
+    if (!shareLink) return;
+    try {
+      const clipboard = navigator.clipboard?.writeText(shareLink);
+      if (!clipboard) throw new Error("Clipboard API unavailable");
+      await Promise.race([clipboard, new Promise((_, reject) => window.setTimeout(() => reject(new Error("Clipboard timed out")), 1_500))]);
+      setNotice("MUTHUR Link copied.");
+    } catch {
+      const field = document.createElement("textarea");
+      field.value = shareLink; field.style.position = "fixed"; field.style.opacity = "0"; document.body.appendChild(field); field.select();
+      const copied = document.execCommand("copy"); field.remove();
+      setNotice(copied ? "MUTHUR Link copied." : "Copy was blocked. Open the link and copy it from the address bar.");
     }
   }
 
@@ -298,7 +331,7 @@ export default function Home() {
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3><a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a></h3>
                 <p className="note">“{bookmark.note}”</p>
-                <div className="card-footer"><span className="tag">{bookmark.collection}</span><button className="load-action" onClick={() => shareLoad(bookmark)} disabled={creatingLoad === bookmark.id}>{creatingLoad === bookmark.id ? "Making…" : "⇩ Create Load"}</button></div>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><button className="load-action share-action" onClick={() => setShareTarget(bookmark)}>↗ Share</button></div>
               </div>
             </article>
           ))}
@@ -349,6 +382,17 @@ export default function Home() {
           <dl className="load-meta"><div><dt>Source</dt><dd>{loadPreview.bookmark.domain}</dd></div><div><dt>Format</dt><dd>MUTHURLOAD {loadPreview.manifest.version}</dd></div><div><dt>Compression</dt><dd>ZIP · Deflate 6</dd></div></dl>
           {loadPreview.content && <pre className="load-content">{loadPreview.content.slice(0, 1_600)}</pre>}
           <button className="primary wide" onClick={takeLoad}>Take Load <span>→</span></button>
+        </div>
+      </div>}
+
+      {shareTarget && <div className="modal-backdrop share-backdrop" onMouseDown={(e) => e.target === e.currentTarget && closeShare()}>
+        <div className="modal share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+          <button className="close" onClick={closeShare} aria-label="Close">×</button>
+          <span className="modal-icon share-icon">↗</span><p className="kicker">SHARE KNOWLEDGE</p><h2 id="share-title">Send the Load.</h2><p>{shareTarget.title}</p>
+          {!shareLink ? <div className="share-options">
+            <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "MUTHURLOAD"}</strong><span>Download the owned, offline `.muthur.load` file.</span></button>
+            <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "MUTHUR LINK"}</strong><span>Create a zero-install browser link. Anyone with it can read this Load.</span></button>
+          </div> : <div className="share-ready"><strong>MUTHUR LINK READY</strong><p>This public-by-possession link contains the complete verified Load.</p><a href={shareLink}>Open in MUTHUR <span>↗</span></a><button onClick={copyPreparedLink}>Copy Link</button></div>}
         </div>
       </div>}
     </main>
