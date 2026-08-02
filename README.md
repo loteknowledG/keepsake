@@ -1,19 +1,23 @@
-# Keepsake
+# Keepseek
 
-A local-first visual bookmark vault for saving links with notes, pictures, favorites, and custom collections.
+Keep what matters, then seek it again.
 
-- No accounts
-- Data stays in your browser
+Keepseek is a local-first visual bookmarking app for saving links with notes, pictures, favorites, and custom collections.
+
+- No Keepseek account
+- SQLite stored locally in the browser through OPFS
 - JSON import and export
-- Public app: https://keepsake-scrapbook.fuzzy-hawk-4653.chatgpt.site
+- Portable MUTHURLOAD creation and verification
+- Public app: https://keepsake-bice.vercel.app
 
 ## Development
 
-Requires Node.js 22.13 or newer.
+The deployed Vite application lives in `pages-app/`.
 
 ```bash
-npm ci
+cd pages-app
+npm install
 npm run dev
 ```
 
-The source app uses React, Next.js, Vinext, and Vite. The hosted ChatGPT Sites deployment is public and account-free.
+Production is deployed through Vercel from this GitHub repository.
