@@ -1,8 +1,9 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { createLoad, createMuthurLink } from "./load-format";
 
-type Bookmark = {
+export type Bookmark = {
   id: number;
   url: string;
   domain: string;
@@ -49,6 +50,9 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [newCollection, setNewCollection] = useState("");
+  const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
+  const [sharing, setSharing] = useState<"load" | "link" | null>(null);
+  const [shareLink, setShareLink] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -113,6 +117,46 @@ export default function Home() {
 
   function toggleFavorite(id: number) {
     setBookmarks((items) => items.map((item) => item.id === id ? { ...item, favorite: !item.favorite } : item));
+  }
+
+  async function downloadLoad(bookmark: Bookmark) {
+    setSharing("load"); setNotice("Packing a verified MUTHURLOAD…");
+    try {
+      const created = await createLoad(bookmark);
+      const downloadUrl = URL.createObjectURL(created.file);
+      const link = document.createElement("a");
+      link.href = downloadUrl; link.download = created.fileName; document.body.appendChild(link); link.click(); link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
+      setNotice(`${created.fileName} is ready.`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Keepseek could not create that Load."); }
+    finally { setSharing(null); closeShare(); }
+  }
+
+  function closeShare() { setShareTarget(null); setShareLink(""); }
+
+  async function prepareMuthurLink(bookmark: Bookmark) {
+    setSharing("link"); setNotice("Building an embedded MUTHUR Link…");
+    try {
+      const created = await createMuthurLink(bookmark);
+      setShareLink(created.url);
+      setNotice(`MUTHUR Link ready. Anyone with it can read this ${created.bytes.toLocaleString()}-byte Load.`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Keepseek could not create that MUTHUR Link."); }
+    finally { setSharing(null); }
+  }
+
+  async function copyPreparedLink() {
+    if (!shareLink) return;
+    try {
+      const clipboard = navigator.clipboard?.writeText(shareLink);
+      if (!clipboard) throw new Error("Clipboard API unavailable");
+      await Promise.race([clipboard, new Promise((_, reject) => window.setTimeout(() => reject(new Error("Clipboard timed out")), 1_500))]);
+      setNotice("MUTHUR Link copied.");
+    } catch {
+      const field = document.createElement("textarea");
+      field.value = shareLink; field.style.position = "fixed"; field.style.opacity = "0"; document.body.appendChild(field); field.select();
+      const copied = document.execCommand("copy"); field.remove();
+      setNotice(copied ? "MUTHUR Link copied." : "Copy was blocked. Open the link and copy it from the address bar.");
+    }
   }
 
   function exportBookmarks() {
@@ -226,7 +270,7 @@ export default function Home() {
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3><a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a></h3>
                 <p className="note">“{bookmark.note}”</p>
-                <span className="tag">{bookmark.collection}</span>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><button className="share-action" onClick={() => setShareTarget(bookmark)}>↗ Share</button></div>
               </div>
             </article>
           ))}
@@ -265,6 +309,17 @@ export default function Home() {
             <label>Collection name<input autoFocus value={newCollection} onChange={(e) => setNewCollection(e.target.value)} placeholder="e.g. Cyberdeck ideas" maxLength={40} required /></label>
             <button className="primary wide" type="submit">Create collection <span>→</span></button>
           </form>
+        </div>
+      </div>}
+
+      {shareTarget && <div className="modal-backdrop share-backdrop" onMouseDown={(e) => e.target === e.currentTarget && closeShare()}>
+        <div className="modal share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+          <button className="close" onClick={closeShare} aria-label="Close">×</button>
+          <span className="modal-icon share-icon">↗</span><p className="kicker">SHARE KNOWLEDGE</p><h2 id="share-title">Send the Load.</h2><p>{shareTarget.title}</p>
+          {!shareLink ? <div className="share-options">
+            <button onClick={() => downloadLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "MUTHURLOAD"}</strong><span>Download the owned, offline `.muthur.load` file.</span></button>
+            <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "MUTHUR LINK"}</strong><span>Create a zero-install browser link. Anyone with it can read this Load.</span></button>
+          </div> : <div className="share-ready"><strong>MUTHUR LINK READY</strong><p>This public-by-possession link contains the complete verified Load.</p><a href={shareLink}>Open in MUTHUR <span>↗</span></a><button onClick={copyPreparedLink}>Copy Link</button></div>}
         </div>
       </div>}
     </main>
