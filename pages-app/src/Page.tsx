@@ -35,7 +35,8 @@ const defaultCollections = ["Research", "Products", "Inspiration", "Reading", "P
 type AddKind = "bookmark" | "playlist";
 
 function metadataFor(rawUrl: string) {
-  const normalized = rawUrl.match(/^https?:\/\//) ? rawUrl : `https://${rawUrl}`;
+  const trimmed = rawUrl.trim();
+  const normalized = trimmed.match(/^https?:\/\//) ? trimmed : `https://${trimmed}`;
   const parsed = new URL(normalized);
   const domain = parsed.hostname.replace(/^www\./, "");
   const slug = parsed.pathname.split("/").filter(Boolean).pop()?.replace(/[-_]/g, " ");
@@ -148,6 +149,12 @@ export default function Home() {
     event.preventDefault();
     const trimmed = url.trim();
     setCaptureError("");
+    if (!trimmed) {
+      const message = "Enter a playlist link, video URL, or embed code.";
+      setCaptureError(message);
+      setNotice(message);
+      return;
+    }
     try {
       if (addKind === "playlist") {
         const metadata = parsePlaylistInput(trimmed);
@@ -163,7 +170,9 @@ export default function Home() {
     } catch (error) {
       setCaptured(null);
       setCapturedEmbed(null);
-      setCaptureError(error instanceof Error ? error.message : "Enter a valid link or embed code.");
+      const message = error instanceof Error ? error.message : "Enter a valid link or embed code.";
+      setCaptureError(message);
+      setNotice(message);
     }
   }
 
@@ -202,6 +211,12 @@ export default function Home() {
   function openAdd(kind: AddKind) {
     setAddKind(kind);
     setCollection(kind === "playlist" ? "Playlists" : "Inspiration");
+    setStep("url");
+    setUrl("");
+    setNote("");
+    setCaptured(null);
+    setCapturedEmbed(null);
+    setCaptureError("");
     setOpen(true);
     setAddMenuOpen(false);
   }
@@ -499,9 +514,9 @@ export default function Home() {
       {notice && <div className="toast" role="status"><span>✓</span>{notice}<button onClick={() => setNotice("")} aria-label="Dismiss">×</button></div>}
 
       {open && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && closeModal()}>
-        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <div className={`modal${step === "player" ? " player-modal" : ""}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <button className="close" onClick={closeModal} aria-label="Close">×</button>
-          {step === "url" ? <form onSubmit={startCapture}>
+          {step === "url" ? <form onSubmit={startCapture} noValidate>
             <span className="modal-icon">{addKind === "playlist" ? "♫" : "↗"}</span>
             <p className="kicker">{addKind === "playlist" ? "NEW PLAYLIST" : "NEW SCRAP"}</p>
             <h2 id="modal-title">{addKind === "playlist" ? "What are you keeping?" : "What caught your eye?"}</h2>
@@ -515,7 +530,7 @@ export default function Home() {
             <button className="primary wide" type="submit">{addKind === "playlist" ? "Open player" : "Gather this page"} <span>→</span></button>
           </form> : step === "player" && captured && capturedEmbed ? <form onSubmit={saveBookmark}>
             <p className="kicker">NOW PLAYING</p><h2 id="modal-title">Preview your playlist.</h2>
-            <MediaPlayer title={captured.title} domain={captured.domain} embed={capturedEmbed} />
+            <MediaPlayer title={captured.title} domain={captured.domain} embed={capturedEmbed} sourceUrl={captured.normalized} />
             <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why are you keeping this playlist?" /></label>
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
             <button className="primary wide" type="submit">Save playlist <span>→</span></button>
@@ -535,7 +550,7 @@ export default function Home() {
           <span className="modal-icon">♫</span>
           <p className="kicker">PLAYLIST</p>
           <h2 id="player-title">{playerTarget.title}</h2>
-          <MediaPlayer title={playerTarget.title} domain={playerTarget.domain} embed={getMediaEmbed(playerTarget.url)!} />
+          <MediaPlayer title={playerTarget.title} domain={playerTarget.domain} embed={getMediaEmbed(playerTarget.url)!} sourceUrl={playerTarget.url} />
           {playerTarget.note && <p className="player-note">“{playerTarget.note}”</p>}
           <div className="player-actions">
             <a href={playerTarget.url} target="_blank" rel="noreferrer">Open source <span>↗</span></a>

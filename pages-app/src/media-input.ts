@@ -34,6 +34,28 @@ function extractEmbedSrc(raw: string): string | null {
   return null;
 }
 
+function extractFirstUrl(raw: string): string | null {
+  const match = raw.match(/https?:\/\/[^\s<>"']+/i);
+  return match?.[0] ?? null;
+}
+
+function normalizeSpotifyUri(raw: string): string | null {
+  const match = raw.trim().match(/^spotify:(playlist|album|track|episode|show):([A-Za-z0-9]+)/i);
+  if (!match) return null;
+  return `https://open.spotify.com/${match[1]}/${match[2]}`;
+}
+
+function isYouTubeHost(host: string) {
+  return [
+    "youtube.com",
+    "m.youtube.com",
+    "music.youtube.com",
+    "youtu.be",
+    "www.youtube-nocookie.com",
+    "youtube-nocookie.com",
+  ].includes(host);
+}
+
 function normalizeYouTube(parsed: URL): MediaMetadata | null {
   const host = parsed.hostname.replace(/^www\./, "");
   if (host === "youtu.be") {
@@ -46,7 +68,18 @@ function normalizeYouTube(parsed: URL): MediaMetadata | null {
       mark: "YouTube",
     };
   }
-  if (!["youtube.com", "m.youtube.com", "music.youtube.com"].includes(host)) return null;
+  if (!isYouTubeHost(host)) return null;
+
+  if (parsed.pathname.startsWith("/shorts/")) {
+    const id = parsed.pathname.split("/").filter(Boolean)[1];
+    if (!id) return null;
+    return {
+      normalized: `https://www.youtube.com/watch?v=${id}`,
+      domain: "youtube.com",
+      title: "YouTube Video",
+      mark: "YouTube",
+    };
+  }
 
   if (parsed.pathname.startsWith("/embed/")) {
     const id = parsed.pathname.split("/").filter(Boolean)[1];
@@ -171,8 +204,15 @@ export function parsePlaylistInput(raw: string): MediaMetadata {
   const embedSrc = extractEmbedSrc(trimmed);
   if (embedSrc) return metadataFromUrl(embedSrc);
 
-  if (/^https?:\/\//i.test(trimmed) || /^[\w.-]+\.[a-z]{2,}/i.test(trimmed)) {
-    return metadataFromUrl(trimmed);
+  const spotifyUri = normalizeSpotifyUri(trimmed);
+  if (spotifyUri) return metadataFromUrl(spotifyUri);
+
+  const firstLine = trimmed.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? trimmed;
+  const candidate = extractFirstUrl(firstLine) ?? firstLine;
+
+  if (/^https?:\/\//i.test(candidate) || /^[\w.-]+\.[a-z]{2,}/i.test(candidate) || /^spotify:/i.test(candidate)) {
+    const spotifyFromCandidate = normalizeSpotifyUri(candidate);
+    return metadataFromUrl(spotifyFromCandidate ?? candidate);
   }
 
   throw new Error("Enter a valid playlist link, video URL, or embed tag.");
@@ -180,11 +220,24 @@ export function parsePlaylistInput(raw: string): MediaMetadata {
 
 function getYouTubeEmbed(parsed: URL): MediaEmbed | null {
   const host = parsed.hostname.replace(/^www\./, "");
-  if (!["youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"].includes(host)) return null;
+  if (!isYouTubeHost(host)) return null;
 
   if (parsed.pathname.startsWith("/embed/")) {
     const isPlaylist = parsed.pathname.includes("videoseries") || parsed.searchParams.has("list");
-    return { embedUrl: parsed.toString(), provider: "youtube", isPlaylist };
+    const embedUrl = host.includes("youtube-nocookie")
+      ? parsed.toString()
+      : parsed.toString().replace("www.youtube.com", "www.youtube-nocookie.com").replace("youtube.com", "youtube-nocookie.com");
+    return { embedUrl, provider: "youtube", isPlaylist };
+  }
+
+  if (parsed.pathname.startsWith("/shorts/")) {
+    const id = parsed.pathname.split("/").filter(Boolean)[1];
+    if (!id) return null;
+    return {
+      embedUrl: `https://www.youtube-nocookie.com/embed/${id}`,
+      provider: "youtube",
+      isPlaylist: false,
+    };
   }
 
   const listId = parsed.searchParams.get("list");
@@ -193,7 +246,7 @@ function getYouTubeEmbed(parsed: URL): MediaEmbed | null {
 
   if (listId && !videoId) {
     return {
-      embedUrl: `https://www.youtube.com/embed/videoseries?list=${listId}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/videoseries?list=${listId}`,
       provider: "youtube",
       isPlaylist: true,
     };
@@ -201,7 +254,7 @@ function getYouTubeEmbed(parsed: URL): MediaEmbed | null {
 
   if (videoId) {
     return {
-      embedUrl: `https://www.youtube.com/embed/${videoId}${listId ? `?list=${listId}` : ""}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}${listId ? `?list=${listId}` : ""}`,
       provider: "youtube",
       isPlaylist: Boolean(listId),
     };
@@ -209,7 +262,7 @@ function getYouTubeEmbed(parsed: URL): MediaEmbed | null {
 
   if (parsed.pathname === "/playlist" && listId) {
     return {
-      embedUrl: `https://www.youtube.com/embed/videoseries?list=${listId}`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/videoseries?list=${listId}`,
       provider: "youtube",
       isPlaylist: true,
     };
