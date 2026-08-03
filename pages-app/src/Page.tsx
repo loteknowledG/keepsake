@@ -25,7 +25,9 @@ const starterBookmarks: Bookmark[] = [
   { id: 5, url: "https://www.dezeen.com/interiors", domain: "dezeen.com", title: "Cabin Fever Interiors", note: "Materials + lighting inspiration.", collection: "Products", palette: "grid", mark: "D", image: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=800&q=80" },
 ];
 
-const defaultCollections = ["Research", "Products", "Inspiration", "Reading"];
+const defaultCollections = ["Research", "Products", "Inspiration", "Reading", "Playlists"];
+
+type AddKind = "bookmark" | "playlist";
 
 function metadataFor(rawUrl: string) {
   const normalized = rawUrl.match(/^https?:\/\//) ? rawUrl : `https://${rawUrl}`;
@@ -48,7 +50,9 @@ export default function Home() {
   const [storageMode, setStorageMode] = useState<StorageMode>("opfs");
   const [active, setActive] = useState("All scraps");
   const [query, setQuery] = useState("");
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [open, setOpen] = useState(false);
+  const [addKind, setAddKind] = useState<AddKind>("bookmark");
   const [step, setStep] = useState<"url" | "details">("url");
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
@@ -70,6 +74,7 @@ export default function Home() {
   const [deleteTarget, setDeleteTarget] = useState<Bookmark | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const loadRef = useRef<HTMLInputElement>(null);
+  const addMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     openKeepsakeDatabase().then(async (stored) => {
@@ -104,11 +109,23 @@ export default function Home() {
         event.preventDefault();
         document.getElementById("keepsake-search")?.focus();
       }
-      if (event.key === "Escape") closeModal();
+      if (event.key === "Escape") {
+        setAddMenuOpen(false);
+        closeModal();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    if (!addMenuOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!addMenuRef.current?.contains(event.target as Node)) setAddMenuOpen(false);
+    }
+    window.addEventListener("mousedown", onPointerDown);
+    return () => window.removeEventListener("mousedown", onPointerDown);
+  }, [addMenuOpen]);
 
   const visible = useMemo(() => bookmarks.filter((bookmark) => {
     const matchesCollection = active === "All scraps" || (active === "Favorites" ? bookmark.favorite : bookmark.collection === active);
@@ -132,12 +149,32 @@ export default function Home() {
     event.preventDefault();
     if (!captured) return;
     const palettes = ["sunset", "grid", "violet", "coral", "garden"];
-    setBookmarks((items) => [{ id: Date.now(), url: captured.normalized, domain: captured.domain, title: captured.title, note: note || "Saved for later.", collection, palette: palettes[items.length % palettes.length], mark: captured.mark }, ...items]);
+    const finalCollection = addKind === "playlist" ? (collection || "Playlists") : collection;
+    if (!userCollections.includes(finalCollection)) {
+      setUserCollections((items) => [...items, finalCollection]);
+    }
+    setBookmarks((items) => [{
+      id: Date.now(),
+      url: captured.normalized,
+      domain: captured.domain,
+      title: captured.title,
+      note: note || (addKind === "playlist" ? "Saved playlist." : "Saved for later."),
+      collection: finalCollection,
+      palette: palettes[items.length % palettes.length],
+      mark: captured.mark,
+    }, ...items]);
     closeModal();
   }
 
+  function openAdd(kind: AddKind) {
+    setAddKind(kind);
+    setCollection(kind === "playlist" ? "Playlists" : "Inspiration");
+    setOpen(true);
+    setAddMenuOpen(false);
+  }
+
   function closeModal() {
-    setOpen(false); setStep("url"); setUrl(""); setNote(""); setCaptured(null);
+    setOpen(false); setStep("url"); setUrl(""); setNote(""); setCaptured(null); setAddKind("bookmark");
   }
 
   function toggleFavorite(id: number) {
@@ -345,7 +382,29 @@ export default function Home() {
         <h1>Keep what matters,<br/>then <em>seek it again.</em></h1>
         <p className="intro">Keepseek automatically saves title, images, links, and metadata<br className="desktop-break"/> so you can find it again—and add your own notes.</p>
         <div className="capture-row">
-          <button className="primary" onClick={() => setOpen(true)}><span>＋</span> Add a bookmark</button>
+          <div className="add-menu" ref={addMenuRef}>
+            <button
+              className="primary add-trigger"
+              type="button"
+              aria-expanded={addMenuOpen}
+              aria-haspopup="menu"
+              onClick={() => setAddMenuOpen((value) => !value)}
+            >
+              <span>＋</span> Add <span className="add-chevron" aria-hidden="true">{addMenuOpen ? "▴" : "▾"}</span>
+            </button>
+            {addMenuOpen && (
+              <div className="add-menu-panel" role="menu" aria-label="Add options">
+                <button type="button" role="menuitem" onClick={() => openAdd("bookmark")}>
+                  <strong>Bookmark</strong>
+                  <span>Save a page, article, or link.</span>
+                </button>
+                <button type="button" role="menuitem" onClick={() => openAdd("playlist")}>
+                  <strong>Playlist</strong>
+                  <span>Keep a music or video playlist together.</span>
+                </button>
+              </div>
+            )}
+          </div>
           <label className="search"><span>⌕</span><input id="keepsake-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search your saved world" /><kbd>⌘ K</kbd></label>
         </div>
         <span className="scribble">Your vault.<br/>Automatically filled<br/>with context. ↙</span>
@@ -394,15 +453,18 @@ export default function Home() {
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <button className="close" onClick={closeModal} aria-label="Close">×</button>
           {step === "url" ? <form onSubmit={startCapture}>
-            <span className="modal-icon">↗</span><p className="kicker">NEW SCRAP</p><h2 id="modal-title">What caught your eye?</h2><p>Paste the address. We’ll gather its picture and details.</p>
-            <label>Website URL<input autoFocus type="text" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://something.wonderful" /></label>
-            <button className="primary wide" type="submit">Gather this page <span>→</span></button>
+            <span className="modal-icon">{addKind === "playlist" ? "♫" : "↗"}</span>
+            <p className="kicker">{addKind === "playlist" ? "NEW PLAYLIST" : "NEW SCRAP"}</p>
+            <h2 id="modal-title">{addKind === "playlist" ? "What are you listening to?" : "What caught your eye?"}</h2>
+            <p>{addKind === "playlist" ? "Paste a playlist link. We’ll gather its title and source." : "Paste the address. We’ll gather its picture and details."}</p>
+            <label>{addKind === "playlist" ? "Playlist URL" : "Website URL"}<input autoFocus type="text" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder={addKind === "playlist" ? "https://open.spotify.com/playlist/..." : "https://something.wonderful"} /></label>
+            <button className="primary wide" type="submit">{addKind === "playlist" ? "Gather this playlist" : "Gather this page"} <span>→</span></button>
           </form> : <form onSubmit={saveBookmark}>
-            <p className="kicker">PAGE FOUND</p><h2 id="modal-title">Make it yours.</h2>
+            <p className="kicker">{addKind === "playlist" ? "PLAYLIST FOUND" : "PAGE FOUND"}</p><h2 id="modal-title">Make it yours.</h2>
             <div className="captured-preview"><div className="mini-art">{captured?.mark}</div><div><small>{captured?.domain}</small><strong>{captured?.title}</strong></div><span>✓</span></div>
-            <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why are you keeping this?" /></label>
+            <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder={addKind === "playlist" ? "Why are you keeping this playlist?" : "Why are you keeping this?"} /></label>
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
-            <button className="primary wide" type="submit">Tuck it away <span>→</span></button>
+            <button className="primary wide" type="submit">{addKind === "playlist" ? "Save playlist" : "Tuck it away"} <span>→</span></button>
           </form>}
         </div>
       </div>}
