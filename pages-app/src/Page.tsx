@@ -3,6 +3,8 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, type StorageMode } from "./storage";
 import { createLoad, createMuthurLink, openLoad, type OpenedLoad } from "./load-format";
+import { parsePlaylistInput, getMediaEmbed, type MediaEmbed } from "./media-input";
+import MediaPlayer from "./MediaPlayer";
 
 export type Bookmark = {
   id: number;
@@ -53,11 +55,14 @@ export default function Home() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [addKind, setAddKind] = useState<AddKind>("bookmark");
-  const [step, setStep] = useState<"url" | "details">("url");
+  const [step, setStep] = useState<"url" | "player" | "details">("url");
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
   const [collection, setCollection] = useState("Inspiration");
   const [captured, setCaptured] = useState<ReturnType<typeof metadataFor> | null>(null);
+  const [capturedEmbed, setCapturedEmbed] = useState<MediaEmbed | null>(null);
+  const [captureError, setCaptureError] = useState("");
+  const [playerTarget, setPlayerTarget] = useState<Bookmark | null>(null);
   const [notice, setNotice] = useState("");
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [newCollection, setNewCollection] = useState("");
@@ -111,6 +116,7 @@ export default function Home() {
       }
       if (event.key === "Escape") {
         setAddMenuOpen(false);
+        setPlayerTarget(null);
         closeModal();
       }
     }
@@ -137,11 +143,24 @@ export default function Home() {
 
   function startCapture(event: FormEvent) {
     event.preventDefault();
+    const trimmed = url.trim();
+    setCaptureError("");
     try {
-      setCaptured(metadataFor(url));
+      if (addKind === "playlist") {
+        const metadata = parsePlaylistInput(trimmed);
+        const embed = getMediaEmbed(trimmed);
+        if (!embed) throw new Error("Could not build a player for that link. Try a YouTube, Spotify, or Vimeo URL.");
+        setCaptured(metadata);
+        setCapturedEmbed(embed);
+        setStep("player");
+        return;
+      }
+      setCaptured(metadataFor(trimmed));
       setStep("details");
-    } catch {
+    } catch (error) {
       setCaptured(null);
+      setCapturedEmbed(null);
+      setCaptureError(error instanceof Error ? error.message : "Enter a valid link or embed code.");
     }
   }
 
@@ -153,17 +172,28 @@ export default function Home() {
     if (!userCollections.includes(finalCollection)) {
       setUserCollections((items) => [...items, finalCollection]);
     }
-    setBookmarks((items) => [{
-      id: Date.now(),
+    const newId = Date.now();
+    const saved = {
+      id: newId,
       url: captured.normalized,
       domain: captured.domain,
       title: captured.title,
       note: note || (addKind === "playlist" ? "Saved playlist." : "Saved for later."),
       collection: finalCollection,
-      palette: palettes[items.length % palettes.length],
+      palette: palettes[bookmarks.length % palettes.length],
       mark: captured.mark,
-    }, ...items]);
+    };
+    setBookmarks((items) => [saved, ...items]);
+    if (addKind === "playlist" && capturedEmbed) {
+      setActive(finalCollection);
+      setPlayerTarget(saved);
+    }
     closeModal();
+  }
+
+  function openPlayer(bookmark: Bookmark) {
+    if (!getMediaEmbed(bookmark.url)) return;
+    setPlayerTarget(bookmark);
   }
 
   function openAdd(kind: AddKind) {
@@ -174,7 +204,14 @@ export default function Home() {
   }
 
   function closeModal() {
-    setOpen(false); setStep("url"); setUrl(""); setNote(""); setCaptured(null); setAddKind("bookmark");
+    setOpen(false);
+    setStep("url");
+    setUrl("");
+    setNote("");
+    setCaptured(null);
+    setCapturedEmbed(null);
+    setCaptureError("");
+    setAddKind("bookmark");
   }
 
   function toggleFavorite(id: number) {
@@ -400,7 +437,7 @@ export default function Home() {
                 </button>
                 <button type="button" role="menuitem" onClick={() => openAdd("playlist")}>
                   <strong>Playlist</strong>
-                  <span>Keep a music or video playlist together.</span>
+                  <span>Keep playlists, videos, or embeds together.</span>
                 </button>
               </div>
             )}
@@ -428,17 +465,26 @@ export default function Home() {
           <button className="new-collection" onClick={() => setCollectionOpen(true)}>＋ New collection</button>
         </div>
         <div className="card-grid">
-          {visible.map((bookmark, index) => (
-            <article className={`bookmark-card tilt-${index % 4}`} key={bookmark.id}>
-              <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined} aria-label={`Open ${bookmark.title}`}><span className={bookmark.image ? "visually-hidden" : ""}>{/keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark}</span></a>
+          {visible.map((bookmark, index) => {
+            const playable = Boolean(getMediaEmbed(bookmark.url));
+            return (
+            <article className={`bookmark-card tilt-${index % 4}${playable ? " playable" : ""}`} key={bookmark.id}>
+              {playable ? (
+                <button type="button" className={`art ${bookmark.palette} play-art`} style={bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined} onClick={() => openPlayer(bookmark)} aria-label={`Play ${bookmark.title}`}>
+                  <span className="play-badge">▶</span>
+                  <span className={bookmark.image ? "visually-hidden" : ""}>{/keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark}</span>
+                </button>
+              ) : (
+                <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined} aria-label={`Open ${bookmark.title}`}><span className={bookmark.image ? "visually-hidden" : ""}>{/keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark}</span></a>
+              )}
               <div className="card-body">
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
-                <h3><a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a></h3>
+                <h3>{playable ? <button type="button" className="title-play" onClick={() => openPlayer(bookmark)}>{bookmark.title}</button> : <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a>}</h3>
                 <p className="note">“{bookmark.note}”</p>
-                <div className="card-footer"><span className="tag">{bookmark.collection}</span><div className="card-actions"><button className="load-action" onClick={() => startEdit(bookmark)}>✎ Edit</button><button className="load-action delete-action" onClick={() => setDeleteTarget(bookmark)}>Delete</button><button className="load-action share-action" onClick={() => setShareTarget(bookmark)}>↗ Share</button></div></div>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}<button className="load-action" onClick={() => startEdit(bookmark)}>✎ Edit</button><button className="load-action delete-action" onClick={() => setDeleteTarget(bookmark)}>Delete</button><button className="load-action share-action" onClick={() => setShareTarget(bookmark)}>↗ Share</button></div></div>
               </div>
             </article>
-          ))}
+          );})}
           {visible.length === 0 && <div className="empty"><span>✦</span><h3>No scraps hiding here.</h3><p>Try another collection or save something new.</p></div>}
         </div>
       </section>
@@ -455,10 +501,21 @@ export default function Home() {
           {step === "url" ? <form onSubmit={startCapture}>
             <span className="modal-icon">{addKind === "playlist" ? "♫" : "↗"}</span>
             <p className="kicker">{addKind === "playlist" ? "NEW PLAYLIST" : "NEW SCRAP"}</p>
-            <h2 id="modal-title">{addKind === "playlist" ? "What are you listening to?" : "What caught your eye?"}</h2>
-            <p>{addKind === "playlist" ? "Paste a playlist link. We’ll gather its title and source." : "Paste the address. We’ll gather its picture and details."}</p>
-            <label>{addKind === "playlist" ? "Playlist URL" : "Website URL"}<input autoFocus type="text" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder={addKind === "playlist" ? "https://open.spotify.com/playlist/..." : "https://something.wonderful"} /></label>
-            <button className="primary wide" type="submit">{addKind === "playlist" ? "Gather this playlist" : "Gather this page"} <span>→</span></button>
+            <h2 id="modal-title">{addKind === "playlist" ? "What are you keeping?" : "What caught your eye?"}</h2>
+            <p>{addKind === "playlist" ? "Paste a playlist link, video URL, or embed code. We’ll gather its title and source." : "Paste the address. We’ll gather its picture and details."}</p>
+            <label>{addKind === "playlist" ? "Playlist, video, or embed" : "Website URL"}
+              {addKind === "playlist"
+                ? <textarea autoFocus required value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder={"https://open.spotify.com/playlist/...\nhttps://youtube.com/watch?v=...\n<iframe src=\"https://www.youtube.com/embed/...\"></iframe>"} rows={4} />
+                : <input autoFocus type="text" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://something.wonderful" />}
+            </label>
+            {captureError && <p className="form-error" role="alert">{captureError}</p>}
+            <button className="primary wide" type="submit">{addKind === "playlist" ? "Open player" : "Gather this page"} <span>→</span></button>
+          </form> : step === "player" && captured && capturedEmbed ? <form onSubmit={saveBookmark}>
+            <p className="kicker">NOW PLAYING</p><h2 id="modal-title">Preview your playlist.</h2>
+            <MediaPlayer title={captured.title} domain={captured.domain} embed={capturedEmbed} />
+            <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why are you keeping this playlist?" /></label>
+            <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
+            <button className="primary wide" type="submit">Save playlist <span>→</span></button>
           </form> : <form onSubmit={saveBookmark}>
             <p className="kicker">{addKind === "playlist" ? "PLAYLIST FOUND" : "PAGE FOUND"}</p><h2 id="modal-title">Make it yours.</h2>
             <div className="captured-preview"><div className="mini-art">{captured?.mark}</div><div><small>{captured?.domain}</small><strong>{captured?.title}</strong></div><span>✓</span></div>
@@ -466,6 +523,21 @@ export default function Home() {
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
             <button className="primary wide" type="submit">{addKind === "playlist" ? "Save playlist" : "Tuck it away"} <span>→</span></button>
           </form>}
+        </div>
+      </div>}
+
+      {playerTarget && getMediaEmbed(playerTarget.url) && <div className="modal-backdrop player-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setPlayerTarget(null)}>
+        <div className="modal player-modal" role="dialog" aria-modal="true" aria-labelledby="player-title">
+          <button className="close" onClick={() => setPlayerTarget(null)} aria-label="Close">×</button>
+          <span className="modal-icon">♫</span>
+          <p className="kicker">PLAYLIST</p>
+          <h2 id="player-title">{playerTarget.title}</h2>
+          <MediaPlayer title={playerTarget.title} domain={playerTarget.domain} embed={getMediaEmbed(playerTarget.url)!} />
+          {playerTarget.note && <p className="player-note">“{playerTarget.note}”</p>}
+          <div className="player-actions">
+            <a href={playerTarget.url} target="_blank" rel="noreferrer">Open source <span>↗</span></a>
+            <button type="button" onClick={() => setPlayerTarget(null)}>Close player</button>
+          </div>
         </div>
       </div>}
 
