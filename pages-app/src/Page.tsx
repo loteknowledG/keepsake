@@ -572,9 +572,9 @@ export default function Home() {
           <button className="close" onClick={closeShare} aria-label="Close">×</button>
           <span className="modal-icon share-icon">↗</span><p className="kicker">SHARE KNOWLEDGE</p><h2 id="share-title">Shoot the Load.</h2><p>{shareTarget.title}</p>
           {!shareLink ? <div className="share-options">
-            <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "MUTHURLOAD"}</strong><span>Download the owned, offline `.muthur.load` file.</span></button>
-            <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "MUTHUR LINK"}</strong><span>Create a zero-install browser link. Anyone with it can read this Load.</span></button>
-          </div> : <div className="share-ready"><strong>MUTHUR LINK READY</strong><p>This public-by-possession link contains the complete verified Load.</p><a href={shareLink}>Open in MUTHUR <span>↗</span></a><button onClick={copyPreparedLink}>Copy Link</button></div>}
+            <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "muthur.load"}</strong><span>Download the owned, offline `.muthur.load` file.</span></button>
+            <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link"}</strong><span>Create a zero-install browser link. Anyone with it can read this Load.</span></button>
+          </div> : <div className="share-ready"><strong>muthur.link ready</strong><p>This public-by-possession link contains the complete verified Load.</p><a href={shareLink}>Open muthur.link <span>↗</span></a><button onClick={copyPreparedLink}>Copy Link</button></div>}
         </div>
       </div>}
 
