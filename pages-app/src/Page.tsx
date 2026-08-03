@@ -6,8 +6,8 @@ import { createLoad, createMuthurLink, openLoad, type OpenedLoad } from "./load-
 import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
 import { IoShareSocialOutline } from "react-icons/io5";
-import { parsePlaylistInput, getMediaEmbed, type MediaEmbed } from "./media-input";
-import MediaPlayer from "./MediaPlayer";
+import { canPlayMedia, resolvePlaylistPlayback, type PlaylistPlayback } from "./video-utils";
+import PlaylistPlayer from "./playlist-player";
 
 export type Bookmark = {
   id: number;
@@ -64,7 +64,7 @@ export default function Home() {
   const [note, setNote] = useState("");
   const [collection, setCollection] = useState("Inspiration");
   const [captured, setCaptured] = useState<ReturnType<typeof metadataFor> | null>(null);
-  const [capturedEmbed, setCapturedEmbed] = useState<MediaEmbed | null>(null);
+  const [capturedPlayback, setCapturedPlayback] = useState<PlaylistPlayback | null>(null);
   const [captureError, setCaptureError] = useState("");
   const [playerTarget, setPlayerTarget] = useState<Bookmark | null>(null);
   const [notice, setNotice] = useState("");
@@ -145,6 +145,19 @@ export default function Home() {
 
   const collectionTabs = ["All scraps", "Favorites", ...userCollections];
 
+  function playbackFor(raw: string): PlaylistPlayback | null {
+    try {
+      return resolvePlaylistPlayback(raw, window.location.origin);
+    } catch {
+      return null;
+    }
+  }
+
+  const playerPlayback = useMemo(
+    () => (playerTarget ? playbackFor(playerTarget.url) : null),
+    [playerTarget],
+  );
+
   function startCapture(event: FormEvent) {
     event.preventDefault();
     const trimmed = url.trim();
@@ -157,11 +170,9 @@ export default function Home() {
     }
     try {
       if (addKind === "playlist") {
-        const metadata = parsePlaylistInput(trimmed);
-        const embed = getMediaEmbed(trimmed);
-        if (!embed) throw new Error("Could not build a player for that link. Try a YouTube, Spotify, or Vimeo URL.");
-        setCaptured(metadata);
-        setCapturedEmbed(embed);
+        const playback = resolvePlaylistPlayback(trimmed, window.location.origin);
+        setCaptured(playback.metadata);
+        setCapturedPlayback(playback);
         setStep("player");
         return;
       }
@@ -169,7 +180,7 @@ export default function Home() {
       setStep("details");
     } catch (error) {
       setCaptured(null);
-      setCapturedEmbed(null);
+      setCapturedPlayback(null);
       const message = error instanceof Error ? error.message : "Enter a valid link or embed code.";
       setCaptureError(message);
       setNotice(message);
@@ -196,7 +207,7 @@ export default function Home() {
       mark: captured.mark,
     };
     setBookmarks((items) => [saved, ...items]);
-    if (addKind === "playlist" && capturedEmbed) {
+    if (addKind === "playlist" && capturedPlayback) {
       setActive(finalCollection);
       setPlayerTarget(saved);
     }
@@ -204,7 +215,7 @@ export default function Home() {
   }
 
   function openPlayer(bookmark: Bookmark) {
-    if (!getMediaEmbed(bookmark.url)) return;
+    if (!canPlayMedia(bookmark.url)) return;
     setPlayerTarget(bookmark);
   }
 
@@ -215,7 +226,7 @@ export default function Home() {
     setUrl("");
     setNote("");
     setCaptured(null);
-    setCapturedEmbed(null);
+    setCapturedPlayback(null);
     setCaptureError("");
     setOpen(true);
     setAddMenuOpen(false);
@@ -227,7 +238,7 @@ export default function Home() {
     setUrl("");
     setNote("");
     setCaptured(null);
-    setCapturedEmbed(null);
+    setCapturedPlayback(null);
     setCaptureError("");
     setAddKind("bookmark");
   }
@@ -484,7 +495,7 @@ export default function Home() {
         </div>
         <div className="card-grid">
           {visible.map((bookmark, index) => {
-            const playable = Boolean(getMediaEmbed(bookmark.url));
+            const playable = canPlayMedia(bookmark.url) || bookmark.collection === "Playlists";
             return (
             <article className={`bookmark-card tilt-${index % 4}${playable ? " playable" : ""}`} key={bookmark.id}>
               {playable ? (
@@ -528,9 +539,9 @@ export default function Home() {
             </label>
             {captureError && <p className="form-error" role="alert">{captureError}</p>}
             <button className="primary wide" type="submit">{addKind === "playlist" ? "Open player" : "Gather this page"} <span>→</span></button>
-          </form> : step === "player" && captured && capturedEmbed ? <form onSubmit={saveBookmark}>
+          </form> : step === "player" && captured && capturedPlayback ? <form onSubmit={saveBookmark}>
             <p className="kicker">NOW PLAYING</p><h2 id="modal-title">Preview your playlist.</h2>
-            <MediaPlayer title={captured.title} domain={captured.domain} embed={capturedEmbed} sourceUrl={captured.normalized} />
+            <PlaylistPlayer playback={capturedPlayback} title={captured.title} sourceUrl={captured.normalized} />
             <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why are you keeping this playlist?" /></label>
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
             <button className="primary wide" type="submit">Save playlist <span>→</span></button>
@@ -544,13 +555,13 @@ export default function Home() {
         </div>
       </div>}
 
-      {playerTarget && getMediaEmbed(playerTarget.url) && <div className="modal-backdrop player-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setPlayerTarget(null)}>
+      {playerTarget && playerPlayback && <div className="modal-backdrop player-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setPlayerTarget(null)}>
         <div className="modal player-modal" role="dialog" aria-modal="true" aria-labelledby="player-title">
           <button className="close" onClick={() => setPlayerTarget(null)} aria-label="Close">×</button>
           <span className="modal-icon">♫</span>
           <p className="kicker">PLAYLIST</p>
           <h2 id="player-title">{playerTarget.title}</h2>
-          <MediaPlayer title={playerTarget.title} domain={playerTarget.domain} embed={getMediaEmbed(playerTarget.url)!} sourceUrl={playerTarget.url} />
+          <PlaylistPlayer playback={playerPlayback} title={playerTarget.title} sourceUrl={playerTarget.url} />
           {playerTarget.note && <p className="player-note">“{playerTarget.note}”</p>}
           <div className="player-actions">
             <a href={playerTarget.url} target="_blank" rel="noreferrer">Open source <span>↗</span></a>
