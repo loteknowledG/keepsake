@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { PlaylistPlayback, VideoEmbedKind } from "./video-utils";
 
 type PlaylistPlayerProps = {
@@ -34,6 +34,13 @@ export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistP
     return playback.isPlaylist ? 450 : 360;
   }, [playback.embedKind, playback.isPlaylist]);
 
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+    // COEP (required for SQLite OPFS) blocks cross-origin iframes unless credentialless.
+    iframe.setAttribute("credentialless", "");
+  }, [playback.iframeSrc]);
+
   const handleStart = useCallback(() => {
     setStarted(true);
     const iframe = iframeRef.current;
@@ -49,7 +56,6 @@ export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistP
           title={title}
           className="playlist-player-iframe"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
           allowFullScreen
         />
         {!started && (
@@ -63,6 +69,9 @@ export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistP
       <div className="media-player-meta">
         <small>{playback.metadata.domain}</small>
         <strong>{title}</strong>
+        {playback.embedKind === "direct" && (
+          <p className="media-player-hint">Some embed hosts block in-app playback. Use Open source if the frame stays blank.</p>
+        )}
         {sourceUrl && <a className="media-player-open" href={sourceUrl} target="_blank" rel="noreferrer">Open source ↗</a>}
       </div>
     </div>
