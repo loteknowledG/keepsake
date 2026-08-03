@@ -4,6 +4,26 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/favicon.ico", "destination": "/favicon.svg" }
+    { "source": "/favicon.ico", "destination": "/favicon.svg" },
+    { "source": "/player", "destination": "/player.html" }
+  ],
+  "headers": [
+    {
+      "source": "/player.html",
+      "headers": []
+    },
+    {
+      "source": "/((?!player\\.html).*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "require-corp"
+        }
+      ]
+    }
   ]
 }

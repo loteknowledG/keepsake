@@ -7,7 +7,7 @@ import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
 import { IoShareSocialOutline } from "react-icons/io5";
 import { canPlayMedia, resolvePlaylistPlayback, type PlaylistPlayback } from "./video-utils";
-import PlaylistPlayer from "./playlist-player";
+import PlaylistPlayerFrame from "./playlist-player-frame";
 
 export type Bookmark = {
   id: number;
@@ -541,7 +541,7 @@ export default function Home() {
             <button className="primary wide" type="submit">{addKind === "playlist" ? "Open player" : "Gather this page"} <span>→</span></button>
           </form> : step === "player" && captured && capturedPlayback ? <form onSubmit={saveBookmark}>
             <p className="kicker">NOW PLAYING</p><h2 id="modal-title">Preview your playlist.</h2>
-            <PlaylistPlayer playback={capturedPlayback} title={captured.title} sourceUrl={captured.normalized} />
+            <PlaylistPlayerFrame playback={capturedPlayback} title={captured.title} sourceUrl={captured.normalized} />
             <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why are you keeping this playlist?" /></label>
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
             <button className="primary wide" type="submit">Save playlist <span>→</span></button>
@@ -561,7 +561,7 @@ export default function Home() {
           <span className="modal-icon">♫</span>
           <p className="kicker">PLAYLIST</p>
           <h2 id="player-title">{playerTarget.title}</h2>
-          <PlaylistPlayer playback={playerPlayback} title={playerTarget.title} sourceUrl={playerTarget.url} />
+          <PlaylistPlayerFrame playback={playerPlayback} title={playerTarget.title} sourceUrl={playerTarget.url} />
           {playerTarget.note && <p className="player-note">“{playerTarget.note}”</p>}
           <div className="player-actions">
             <a href={playerTarget.url} target="_blank" rel="noreferrer">Open source <span>↗</span></a>
