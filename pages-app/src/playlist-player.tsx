@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { PlaylistPlayback, VideoEmbedKind } from "./video-utils";
 
 type PlaylistPlayerProps = {
@@ -28,25 +28,12 @@ function postEmbedPlay(iframe: HTMLIFrameElement, iframeSrc: string, embedKind: 
 
 export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistPlayerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const needsStartOverlay = playback.embedKind !== "direct";
-  const [started, setStarted] = useState(!needsStartOverlay);
-  const [iframeReady, setIframeReady] = useState(false);
+  const awaitingUserStart = playback.embedKind !== "direct";
+  const [started, setStarted] = useState(!awaitingUserStart);
   const height = useMemo(() => {
     if (playback.embedKind === "spotify") return playback.isPlaylist ? 380 : 152;
     return playback.isPlaylist ? 450 : 360;
   }, [playback.embedKind, playback.isPlaylist]);
-
-  useEffect(() => {
-    setIframeReady(false);
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-
-    iframe.removeAttribute("src");
-    iframe.setAttribute("credentialless", "");
-    iframe.referrerPolicy = "no-referrer";
-    iframe.src = playback.iframeSrc;
-    setIframeReady(true);
-  }, [playback.iframeSrc]);
 
   const handleStart = () => {
     setStarted(true);
@@ -57,17 +44,15 @@ export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistP
   return (
     <div className="media-player">
       <div className="media-player-frame playlist-player-frame" style={{ height }}>
-        {!iframeReady && playback.embedKind === "direct" && (
-          <div className="playlist-player-loading" aria-hidden="true">Loading embed…</div>
-        )}
         <iframe
           ref={iframeRef}
+          src={playback.iframeSrc}
           title={title}
           className="playlist-player-iframe"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
         />
-        {needsStartOverlay && !started && (
+        {awaitingUserStart && !started && (
           <button type="button" className="playlist-player-start" onClick={handleStart} aria-label="Start playlist playback">
             <span className="playlist-player-start-icon">▶</span>
             <strong>Click to start playlist</strong>
@@ -78,9 +63,6 @@ export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistP
       <div className="media-player-meta">
         <small>{playback.metadata.domain}</small>
         <strong>{title}</strong>
-        {playback.embedKind === "direct" && (
-          <p className="media-player-hint">Some embed hosts block in-app playback. Use Open source if the frame stays blank.</p>
-        )}
         {sourceUrl && <a className="media-player-open" href={sourceUrl} target="_blank" rel="noreferrer">Open source ↗</a>}
       </div>
     </div>

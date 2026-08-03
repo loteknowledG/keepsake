@@ -21,18 +21,6 @@ export default defineConfig({
     },
   ],
   base: "/",
-  server: {
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "credentialless",
-    },
-  },
-  preview: {
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "credentialless",
-    },
-  },
   optimizeDeps: {
     exclude: ["@sqlite.org/sqlite-wasm"],
   },
