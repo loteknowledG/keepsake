@@ -3,6 +3,9 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, type StorageMode } from "./storage";
 import { createLoad, createMuthurLink, openLoad, type OpenedLoad } from "./load-format";
+import { VscEditCompact } from "react-icons/vsc";
+import { AiTwotoneDelete } from "react-icons/ai";
+import { IoShareSocialOutline } from "react-icons/io5";
 import { parsePlaylistInput, getMediaEmbed, type MediaEmbed } from "./media-input";
 import MediaPlayer from "./MediaPlayer";
 
@@ -481,7 +484,7 @@ export default function Home() {
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3>{playable ? <button type="button" className="title-play" onClick={() => openPlayer(bookmark)}>{bookmark.title}</button> : <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a>}</h3>
                 <p className="note">“{bookmark.note}”</p>
-                <div className="card-footer"><span className="tag">{bookmark.collection}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}<button className="load-action" onClick={() => startEdit(bookmark)}>✎ Edit</button><button className="load-action delete-action" onClick={() => setDeleteTarget(bookmark)}>Delete</button><button className="load-action share-action" onClick={() => setShareTarget(bookmark)}>↗ Share</button></div></div>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}<button type="button" className={`icon-btn edit-icon-btn edit-${bookmark.palette}`} onClick={() => startEdit(bookmark)} aria-label={`Edit ${bookmark.title}`}><VscEditCompact aria-hidden="true" /></button><button type="button" className={`icon-btn delete-icon-btn delete-${bookmark.palette}`} onClick={() => setDeleteTarget(bookmark)} aria-label={`Delete ${bookmark.title}`}><AiTwotoneDelete aria-hidden="true" /></button><button type="button" className={`icon-btn share-icon-btn share-${bookmark.palette}`} onClick={() => setShareTarget(bookmark)} aria-label={`Share ${bookmark.title}`}><IoShareSocialOutline aria-hidden="true" /></button></div></div>
               </div>
             </article>
           );})}

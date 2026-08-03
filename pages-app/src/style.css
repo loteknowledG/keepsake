@@ -82,6 +82,24 @@ footer { min-height:120px; padding:35px 5vw; border-top:1px solid var(--line); d
 .play-art{width:calc(100% - 20px);padding:0;cursor:pointer}.play-badge{position:absolute;inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:50%;background:rgba(23,23,19,.72);color:var(--paper);display:grid;place-items:center;font-size:18px;border:2px solid var(--paper);z-index:2}
 .title-play{border:0;background:transparent;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;font-family:Georgia,serif;font-size:20px;line-height:1.08;font-weight:600}.title-play:hover{text-decoration:underline;text-decoration-color:var(--coral)}
 .play-action{background:#dfeccf}
+.icon-btn{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid var(--ink);border-radius:8px 10px 7px 11px;font-size:16px;line-height:1;cursor:pointer;box-shadow:2px 3px 0 var(--ink);transition:.16s ease}
+.icon-btn:hover{transform:translate(-1px,-2px);box-shadow:3px 5px 0 var(--ink)}
+.icon-btn:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--ink)}
+.edit-icon-btn.edit-sunset{color:#000;background:#ff0}
+.edit-icon-btn.edit-grid{color:#333;background:#ddd}
+.edit-icon-btn.edit-violet{color:#f0f;background:#fff}
+.edit-icon-btn.edit-coral{color:#fff;background:#000}
+.edit-icon-btn.edit-garden{color:#000;background:#0ff}
+.delete-icon-btn.delete-sunset{color:#000;background:#ff0}
+.delete-icon-btn.delete-grid{color:#333;background:#ddd}
+.delete-icon-btn.delete-violet{color:#f0f;background:#fff}
+.delete-icon-btn.delete-coral{color:#fff;background:#000}
+.delete-icon-btn.delete-garden{color:#000;background:#0ff}
+.share-icon-btn.share-sunset{color:#000;background:#ff0}
+.share-icon-btn.share-grid{color:#333;background:#ddd}
+.share-icon-btn.share-violet{color:#f0f;background:#fff}
+.share-icon-btn.share-coral{color:#fff;background:#000}
+.share-icon-btn.share-garden{color:#000;background:#0ff}
 @keyframes arrive{from{opacity:0;transform:translateY(18px) rotate(0)}to{opacity:1}}@keyframes fade{from{opacity:0}}
 @media(max-width:1100px){.card-grid{grid-template-columns:repeat(3,1fr)}.scribble{display:none}}
 @media(max-width:760px){.topbar{padding:0 20px}.topbar nav{display:none}.hero{padding:55px 20px 20px}.intro{font-size:17px}.desktop-break{display:none}.capture-row{grid-template-columns:1fr;gap:14px}.add-menu{grid-row:2}.library{padding:35px 20px 80px}.library-head{display:block}.data-actions{margin-top:18px;flex-wrap:wrap}.local-pill{flex-basis:100%;margin-bottom:4px}.scrap-count{display:none}.card-grid{grid-template-columns:repeat(2,1fr)}.how{margin:0 20px 70px;padding:30px}.steps{grid-template-columns:1fr}.modal{padding:34px 23px}.load-meta{grid-template-columns:1fr}footer{flex-direction:column;gap:20px;text-align:center}}
