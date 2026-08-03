@@ -180,7 +180,7 @@ export function normalizeEmbedSrc(src: string, autoPlay = false, origin?: string
     return applyEmbedPlayerParams(`https://player.vimeo.com/video/${vimeoId}`, autoPlay, origin);
   }
 
-  return applyEmbedPlayerParams(normalized, autoPlay, origin);
+  return normalized;
 }
 
 export function normalizeProtocol(rawUrl: string) {

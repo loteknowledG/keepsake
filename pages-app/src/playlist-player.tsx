@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PlaylistPlayback, VideoEmbedKind } from "./video-utils";
 
 type PlaylistPlayerProps = {
@@ -30,28 +30,38 @@ export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistP
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const needsStartOverlay = playback.embedKind !== "direct";
   const [started, setStarted] = useState(!needsStartOverlay);
+  const [iframeReady, setIframeReady] = useState(false);
   const height = useMemo(() => {
     if (playback.embedKind === "spotify") return playback.isPlaylist ? 380 : 152;
     return playback.isPlaylist ? 450 : 360;
   }, [playback.embedKind, playback.isPlaylist]);
 
-  const bindIframe = useCallback((node: HTMLIFrameElement | null) => {
-    iframeRef.current = node;
-    if (node) node.setAttribute("credentialless", "");
-  }, []);
+  useEffect(() => {
+    setIframeReady(false);
+    const iframe = iframeRef.current;
+    if (!iframe) return;
 
-  const handleStart = useCallback(() => {
+    iframe.removeAttribute("src");
+    iframe.setAttribute("credentialless", "");
+    iframe.referrerPolicy = "no-referrer";
+    iframe.src = playback.iframeSrc;
+    setIframeReady(true);
+  }, [playback.iframeSrc]);
+
+  const handleStart = () => {
     setStarted(true);
     const iframe = iframeRef.current;
     if (iframe) postEmbedPlay(iframe, playback.iframeSrc, playback.embedKind);
-  }, [playback.embedKind, playback.iframeSrc]);
+  };
 
   return (
     <div className="media-player">
       <div className="media-player-frame playlist-player-frame" style={{ height }}>
+        {!iframeReady && playback.embedKind === "direct" && (
+          <div className="playlist-player-loading" aria-hidden="true">Loading embed…</div>
+        )}
         <iframe
-          ref={bindIframe}
-          src={playback.iframeSrc}
+          ref={iframeRef}
           title={title}
           className="playlist-player-iframe"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
