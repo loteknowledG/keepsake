@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { PlaylistPlayback, VideoEmbedKind } from "./video-utils";
 
 type PlaylistPlayerProps = {
@@ -28,18 +28,17 @@ function postEmbedPlay(iframe: HTMLIFrameElement, iframeSrc: string, embedKind: 
 
 export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistPlayerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [started, setStarted] = useState(false);
+  const needsStartOverlay = playback.embedKind !== "direct";
+  const [started, setStarted] = useState(!needsStartOverlay);
   const height = useMemo(() => {
     if (playback.embedKind === "spotify") return playback.isPlaylist ? 380 : 152;
     return playback.isPlaylist ? 450 : 360;
   }, [playback.embedKind, playback.isPlaylist]);
 
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
-    // COEP (required for SQLite OPFS) blocks cross-origin iframes unless credentialless.
-    iframe.setAttribute("credentialless", "");
-  }, [playback.iframeSrc]);
+  const bindIframe = useCallback((node: HTMLIFrameElement | null) => {
+    iframeRef.current = node;
+    if (node) node.setAttribute("credentialless", "");
+  }, []);
 
   const handleStart = useCallback(() => {
     setStarted(true);
@@ -51,14 +50,14 @@ export default function PlaylistPlayer({ playback, title, sourceUrl }: PlaylistP
     <div className="media-player">
       <div className="media-player-frame playlist-player-frame" style={{ height }}>
         <iframe
-          ref={iframeRef}
+          ref={bindIframe}
           src={playback.iframeSrc}
           title={title}
           className="playlist-player-iframe"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
         />
-        {!started && (
+        {needsStartOverlay && !started && (
           <button type="button" className="playlist-player-start" onClick={handleStart} aria-label="Start playlist playback">
             <span className="playlist-player-start-icon">▶</span>
             <strong>Click to start playlist</strong>
