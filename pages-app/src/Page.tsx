@@ -9,6 +9,8 @@ import { IoShareSocialOutline } from "react-icons/io5";
 import { canPlayMedia, resolvePlaylistPlayback, type PlaylistPlayback } from "./video-utils";
 import PlaylistPlayerFrame from "./playlist-player-frame";
 
+export type ScrapKind = "bookmark" | "playlist" | "ad";
+
 export type Bookmark = {
   id: number;
   url: string;
@@ -18,21 +20,74 @@ export type Bookmark = {
   collection: string;
   palette: string;
   mark: string;
+  kind: ScrapKind;
   favorite?: boolean;
   image?: string;
 };
 
+function normalizeScrapKind(kind: unknown, collection?: string): ScrapKind {
+  if (kind === "bookmark" || kind === "playlist" || kind === "ad") return kind;
+  if (collection === "Playlists") return "playlist";
+  if (collection === "Ads") return "ad";
+  return "bookmark";
+}
+
 const starterBookmarks: Bookmark[] = [
-  { id: 1, url: "https://www.technologyreview.com", domain: "technologyreview.com", title: "The Future of Small Models", note: "Useful framing for local agents.", collection: "Research", palette: "violet", mark: "MIT", favorite: true, image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=800&q=80" },
-  { id: 2, url: "https://anniemiller.co/lisbon", domain: "anniemiller.co", title: "A quiet weekend in Lisbon", note: "For the fall trip.", collection: "Inspiration", palette: "coral", mark: "AM", image: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&w=800&q=80" },
-  { id: 3, url: "https://www.are.na/editorial", domain: "are.na", title: "Designing with Memory", note: "Reference for Calyx.", collection: "Inspiration", palette: "sunset", mark: "A", image: "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=800&q=80" },
-  { id: 4, url: "https://sproutedkitchen.com", domain: "sproutedkitchen.com", title: "Lemon & Ricotta Pasta", note: "Weeknight favorite.", collection: "Reading", palette: "garden", mark: "SK", favorite: true, image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=800&q=80" },
-  { id: 5, url: "https://www.dezeen.com/interiors", domain: "dezeen.com", title: "Cabin Fever Interiors", note: "Materials + lighting inspiration.", collection: "Products", palette: "grid", mark: "D", image: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=800&q=80" },
+  { id: 1, kind: "bookmark", url: "https://www.technologyreview.com", domain: "technologyreview.com", title: "The Future of Small Models", note: "Useful framing for local agents.", collection: "Research", palette: "violet", mark: "MIT", favorite: true, image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?auto=format&fit=crop&w=800&q=80" },
+  { id: 2, kind: "bookmark", url: "https://anniemiller.co/lisbon", domain: "anniemiller.co", title: "A quiet weekend in Lisbon", note: "For the fall trip.", collection: "Inspiration", palette: "coral", mark: "AM", image: "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?auto=format&fit=crop&w=800&q=80" },
+  { id: 3, kind: "bookmark", url: "https://www.are.na/editorial", domain: "are.na", title: "Designing with Memory", note: "Reference for Calyx.", collection: "Inspiration", palette: "sunset", mark: "A", image: "https://images.unsplash.com/photo-1494438639946-1ebd1d20bf85?auto=format&fit=crop&w=800&q=80" },
+  { id: 4, kind: "bookmark", url: "https://sproutedkitchen.com", domain: "sproutedkitchen.com", title: "Lemon & Ricotta Pasta", note: "Weeknight favorite.", collection: "Reading", palette: "garden", mark: "SK", favorite: true, image: "https://images.unsplash.com/photo-1473093295043-cdd812d0e601?auto=format&fit=crop&w=800&q=80" },
+  { id: 5, kind: "bookmark", url: "https://www.dezeen.com/interiors", domain: "dezeen.com", title: "Cabin Fever Interiors", note: "Materials + lighting inspiration.", collection: "Products", palette: "grid", mark: "D", image: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=800&q=80" },
 ];
 
-const defaultCollections = ["Research", "Products", "Inspiration", "Reading", "Playlists"];
+const defaultCollections = ["Research", "Products", "Inspiration", "Reading", "Playlists", "Ads"];
 
-type AddKind = "bookmark" | "playlist";
+type AddKind = ScrapKind;
+
+function defaultCollectionFor(kind: AddKind): string {
+  switch (kind) {
+    case "playlist":
+      return "Playlists";
+    case "ad":
+      return "Ads";
+    case "bookmark":
+      return "Inspiration";
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
+
+function emptyUrlMessage(kind: AddKind): string {
+  switch (kind) {
+    case "playlist":
+      return "Enter a playlist link, video URL, or embed code.";
+    case "ad":
+      return "Enter an ad link or landing page URL.";
+    case "bookmark":
+      return "Enter a website URL.";
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
+
+function defaultNoteFor(kind: AddKind): string {
+  switch (kind) {
+    case "playlist":
+      return "Saved playlist.";
+    case "ad":
+      return "Saved ad.";
+    case "bookmark":
+      return "Saved for later.";
+    default: {
+      const _exhaustive: never = kind;
+      return _exhaustive;
+    }
+  }
+}
 
 function metadataFor(rawUrl: string) {
   const trimmed = rawUrl.trim();
@@ -89,7 +144,11 @@ export default function Home() {
     openKeepsakeDatabase().then(async (stored) => {
       const legacyBookmarks = window.localStorage.getItem("keepsake-bookmarks");
       const legacyCollections = window.localStorage.getItem("keepsake-collections");
-      const nextBookmarks = stored.bookmarks.length ? stored.bookmarks : legacyBookmarks ? JSON.parse(legacyBookmarks) : starterBookmarks;
+      const nextBookmarks = (stored.bookmarks.length ? stored.bookmarks : legacyBookmarks ? JSON.parse(legacyBookmarks) : starterBookmarks)
+        .map((item: Bookmark) => ({
+          ...item,
+          kind: normalizeScrapKind(item.kind, item.collection),
+        }));
       const nextCollections = stored.collections.length ? stored.collections : legacyCollections ? JSON.parse(legacyCollections) : defaultCollections;
       setBookmarks(nextBookmarks);
       setUserCollections(nextCollections);
@@ -163,7 +222,7 @@ export default function Home() {
     const trimmed = url.trim();
     setCaptureError("");
     if (!trimmed) {
-      const message = "Enter a playlist link, video URL, or embed code.";
+      const message = emptyUrlMessage(addKind);
       setCaptureError(message);
       setNotice(message);
       return;
@@ -191,20 +250,21 @@ export default function Home() {
     event.preventDefault();
     if (!captured) return;
     const palettes = ["sunset", "grid", "violet", "coral", "garden"];
-    const finalCollection = addKind === "playlist" ? (collection || "Playlists") : collection;
+    const finalCollection = collection || defaultCollectionFor(addKind);
     if (!userCollections.includes(finalCollection)) {
       setUserCollections((items) => [...items, finalCollection]);
     }
     const newId = Date.now();
-    const saved = {
+    const saved: Bookmark = {
       id: newId,
       url: captured.normalized,
       domain: captured.domain,
       title: captured.title,
-      note: note || (addKind === "playlist" ? "Saved playlist." : "Saved for later."),
+      note: note || defaultNoteFor(addKind),
       collection: finalCollection,
       palette: palettes[bookmarks.length % palettes.length],
       mark: captured.mark,
+      kind: addKind,
     };
     setBookmarks((items) => [saved, ...items]);
     if (addKind === "playlist" && capturedPlayback) {
@@ -221,7 +281,7 @@ export default function Home() {
 
   function openAdd(kind: AddKind) {
     setAddKind(kind);
-    setCollection(kind === "playlist" ? "Playlists" : "Inspiration");
+    setCollection(defaultCollectionFor(kind));
     setStep("url");
     setUrl("");
     setNote("");
@@ -354,7 +414,11 @@ export default function Home() {
 
   function takeLoad() {
     if (!loadPreview) return;
-    const incoming = { ...loadPreview.bookmark, id: Date.now() };
+    const incoming: Bookmark = {
+      ...loadPreview.bookmark,
+      id: Date.now(),
+      kind: normalizeScrapKind(loadPreview.bookmark.kind, loadPreview.bookmark.collection),
+    };
     setBookmarks((current) => {
       const byUrl = new Map(current.map((item) => [item.url, item]));
       byUrl.set(incoming.url, incoming);
@@ -398,6 +462,7 @@ export default function Home() {
       ).map((item: Bookmark, index: number) => ({
         ...item,
         id: typeof item.id === "number" ? item.id : Date.now() + index,
+        kind: normalizeScrapKind(item.kind, item.collection),
         note: typeof item.note === "string" ? item.note : "Imported into Keepseek.",
         collection: typeof item.collection === "string" ? item.collection : "Reading",
         palette: typeof item.palette === "string" ? item.palette : "sunset",
@@ -468,6 +533,10 @@ export default function Home() {
                   <strong>Playlist</strong>
                   <span>Keep playlists, videos, or embeds together.</span>
                 </button>
+                <button type="button" role="menuitem" onClick={() => openAdd("ad")}>
+                  <strong>Ad</strong>
+                  <span>Save a campaign, creative, or landing page.</span>
+                </button>
               </div>
             )}
           </div>
@@ -495,7 +564,7 @@ export default function Home() {
         </div>
         <div className="card-grid">
           {visible.map((bookmark, index) => {
-            const playable = canPlayMedia(bookmark.url) || bookmark.collection === "Playlists";
+            const playable = bookmark.kind === "playlist" && (canPlayMedia(bookmark.url) || bookmark.collection === "Playlists");
             return (
             <article className={`bookmark-card tilt-${index % 4}${playable ? " playable" : ""}`} key={bookmark.id}>
               {playable ? (
@@ -510,7 +579,7 @@ export default function Home() {
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3>{playable ? <button type="button" className="title-play" onClick={() => openPlayer(bookmark)}>{bookmark.title}</button> : <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a>}</h3>
                 <p className="note">“{bookmark.note}”</p>
-                <div className="card-footer"><span className="tag">{bookmark.collection}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}<button type="button" className={`icon-btn edit-icon-btn edit-${bookmark.palette}`} onClick={() => startEdit(bookmark)} aria-label={`Edit ${bookmark.title}`}><VscEditCompact aria-hidden="true" /></button><button type="button" className={`icon-btn delete-icon-btn delete-${bookmark.palette}`} onClick={() => setDeleteTarget(bookmark)} aria-label={`Delete ${bookmark.title}`}><AiTwotoneDelete aria-hidden="true" /></button><button type="button" className={`icon-btn share-icon-btn share-${bookmark.palette}`} onClick={() => setShareTarget(bookmark)} aria-label={`Share ${bookmark.title}`}><IoShareSocialOutline aria-hidden="true" /></button></div></div>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><span className="tag tag-kind">{bookmark.kind}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}<button type="button" className={`icon-btn edit-icon-btn edit-${bookmark.palette}`} onClick={() => startEdit(bookmark)} aria-label={`Edit ${bookmark.title}`}><VscEditCompact aria-hidden="true" /></button><button type="button" className={`icon-btn delete-icon-btn delete-${bookmark.palette}`} onClick={() => setDeleteTarget(bookmark)} aria-label={`Delete ${bookmark.title}`}><AiTwotoneDelete aria-hidden="true" /></button><button type="button" className={`icon-btn share-icon-btn share-${bookmark.palette}`} onClick={() => setShareTarget(bookmark)} aria-label={`Share ${bookmark.title}`}><IoShareSocialOutline aria-hidden="true" /></button></div></div>
               </div>
             </article>
           );})}
@@ -528,17 +597,17 @@ export default function Home() {
         <div className={`modal${step === "player" ? " player-modal" : ""}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <button className="close" onClick={closeModal} aria-label="Close">×</button>
           {step === "url" ? <form onSubmit={startCapture} noValidate>
-            <span className="modal-icon">{addKind === "playlist" ? "♫" : "↗"}</span>
-            <p className="kicker">{addKind === "playlist" ? "NEW PLAYLIST" : "NEW SCRAP"}</p>
-            <h2 id="modal-title">{addKind === "playlist" ? "What are you keeping?" : "What caught your eye?"}</h2>
-            <p>{addKind === "playlist" ? "Paste a playlist link, video URL, or embed code. We’ll gather its title and source." : "Paste the address. We’ll gather its picture and details."}</p>
-            <label>{addKind === "playlist" ? "Playlist, video, or embed" : "Website URL"}
+            <span className="modal-icon">{addKind === "playlist" ? "♫" : addKind === "ad" ? "◎" : "↗"}</span>
+            <p className="kicker">{addKind === "playlist" ? "NEW PLAYLIST" : addKind === "ad" ? "NEW AD" : "NEW SCRAP"}</p>
+            <h2 id="modal-title">{addKind === "playlist" ? "What are you keeping?" : addKind === "ad" ? "Which ad are you keeping?" : "What caught your eye?"}</h2>
+            <p>{addKind === "playlist" ? "Paste a playlist link, video URL, or embed code. We’ll gather its title and source." : addKind === "ad" ? "Paste the ad link or landing page. We’ll gather its title and source." : "Paste the address. We’ll gather its picture and details."}</p>
+            <label>{addKind === "playlist" ? "Playlist, video, or embed" : addKind === "ad" ? "Ad URL" : "Website URL"}
               {addKind === "playlist"
                 ? <textarea autoFocus required value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder={"https://open.spotify.com/playlist/...\nhttps://youtube.com/watch?v=...\n<iframe src=\"https://www.youtube.com/embed/...\"></iframe>"} rows={4} />
-                : <input autoFocus type="text" required value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://something.wonderful" />}
+                : <input autoFocus type="text" required value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder={addKind === "ad" ? "https://brand.com/campaign" : "https://something.wonderful"} />}
             </label>
             {captureError && <p className="form-error" role="alert">{captureError}</p>}
-            <button className="primary wide" type="submit">{addKind === "playlist" ? "Open player" : "Gather this page"} <span>→</span></button>
+            <button className="primary wide" type="submit">{addKind === "playlist" ? "Open player" : addKind === "ad" ? "Gather this ad" : "Gather this page"} <span>→</span></button>
           </form> : step === "player" && captured && capturedPlayback ? <form onSubmit={saveBookmark}>
             <p className="kicker">NOW PLAYING</p><h2 id="modal-title">Preview your playlist.</h2>
             <PlaylistPlayerFrame playback={capturedPlayback} title={captured.title} sourceUrl={captured.normalized} />
@@ -546,11 +615,11 @@ export default function Home() {
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
             <button className="primary wide" type="submit">Save playlist <span>→</span></button>
           </form> : <form onSubmit={saveBookmark}>
-            <p className="kicker">{addKind === "playlist" ? "PLAYLIST FOUND" : "PAGE FOUND"}</p><h2 id="modal-title">Make it yours.</h2>
+            <p className="kicker">{addKind === "playlist" ? "PLAYLIST FOUND" : addKind === "ad" ? "AD FOUND" : "PAGE FOUND"}</p><h2 id="modal-title">Make it yours.</h2>
             <div className="captured-preview"><div className="mini-art">{captured?.mark}</div><div><small>{captured?.domain}</small><strong>{captured?.title}</strong></div><span>✓</span></div>
-            <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder={addKind === "playlist" ? "Why are you keeping this playlist?" : "Why are you keeping this?"} /></label>
+            <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder={addKind === "playlist" ? "Why are you keeping this playlist?" : addKind === "ad" ? "Why are you keeping this ad?" : "Why are you keeping this?"} /></label>
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
-            <button className="primary wide" type="submit">{addKind === "playlist" ? "Save playlist" : "Tuck it away"} <span>→</span></button>
+            <button className="primary wide" type="submit">{addKind === "playlist" ? "Save playlist" : addKind === "ad" ? "Save ad" : "Tuck it away"} <span>→</span></button>
           </form>}
         </div>
       </div>}

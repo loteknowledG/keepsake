@@ -20,10 +20,28 @@ function loadData() {
   const bookmarks = query<Record<string, string | number | null>>("SELECT * FROM bookmarks ORDER BY id").map((row) => ({
     id: Number(row.id), url: String(row.url), domain: String(row.domain), title: String(row.title),
     note: String(row.note), collection: String(row.collection), palette: String(row.palette), mark: String(row.mark),
+    kind: String(row.kind ?? ""),
     favorite: Boolean(row.favorite), image: row.image ? String(row.image) : undefined,
+  })).map((row) => ({
+    ...row,
+    kind: row.kind === "bookmark" || row.kind === "playlist" || row.kind === "ad"
+      ? row.kind
+      : row.collection === "Playlists"
+        ? "playlist"
+        : row.collection === "Ads"
+          ? "ad"
+          : "bookmark",
   }));
   const collections = query<{ name: string }>("SELECT name FROM collections ORDER BY position").map((row) => row.name);
   return { bookmarks, collections };
+}
+
+function ensureKindColumn() {
+  if (!database) return;
+  const columns = query<{ name: string }>("PRAGMA table_info(bookmarks)");
+  if (!columns.some((column) => column.name === "kind")) {
+    database.exec("ALTER TABLE bookmarks ADD COLUMN kind TEXT NOT NULL DEFAULT 'bookmark'");
+  }
 }
 
 async function initialize() {
@@ -35,9 +53,10 @@ async function initialize() {
     CREATE TABLE IF NOT EXISTS bookmarks (
       id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, domain TEXT NOT NULL, title TEXT NOT NULL,
       note TEXT NOT NULL, collection TEXT NOT NULL, palette TEXT NOT NULL, mark TEXT NOT NULL,
-      favorite INTEGER NOT NULL DEFAULT 0, image TEXT
+      favorite INTEGER NOT NULL DEFAULT 0, image TEXT, kind TEXT NOT NULL DEFAULT 'bookmark'
     );
   `);
+  ensureKindColumn();
   return loadData();
 }
 
@@ -48,8 +67,8 @@ function save(payload: { bookmarks: Bookmark[]; collections: string[] }) {
     db.exec("DELETE FROM collections");
     payload.collections.forEach((name, position) => db.exec({ sql: "INSERT INTO collections(name, position) VALUES (?, ?)", bind: [name, position] }));
     payload.bookmarks.forEach((item) => db.exec({
-      sql: "INSERT INTO bookmarks(id,url,domain,title,note,collection,palette,mark,favorite,image) VALUES (?,?,?,?,?,?,?,?,?,?)",
-      bind: [item.id, item.url, item.domain, item.title, item.note, item.collection, item.palette, item.mark, item.favorite ? 1 : 0, item.image ?? null],
+      sql: "INSERT INTO bookmarks(id,url,domain,title,note,collection,palette,mark,favorite,image,kind) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+      bind: [item.id, item.url, item.domain, item.title, item.note, item.collection, item.palette, item.mark, item.favorite ? 1 : 0, item.image ?? null, item.kind],
     }));
   });
 }
