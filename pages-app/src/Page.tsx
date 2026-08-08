@@ -10,6 +10,7 @@ import { IoShareSocialOutline } from "react-icons/io5";
 import { canPlayMedia, resolvePlaylistPlayback, type PlaylistPlayback } from "./video-utils";
 import PlaylistPlayerFrame from "./playlist-player-frame";
 import AdCreativeField from "./ad-creative-field";
+import AdImageGallery from "./ad-image-gallery";
 
 export type ScrapKind = "bookmark" | "playlist" | "ad";
 
@@ -171,6 +172,7 @@ export default function Home() {
   const [captureError, setCaptureError] = useState("");
   const [playerTarget, setPlayerTarget] = useState<Bookmark | null>(null);
   const [adTarget, setAdTarget] = useState<Bookmark | null>(null);
+  const [imageGallery, setImageGallery] = useState<{ images: string[]; index: number; title: string } | null>(null);
   const [notice, setNotice] = useState("");
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [newCollection, setNewCollection] = useState("");
@@ -361,13 +363,13 @@ export default function Home() {
   function saveAdCompose(event: FormEvent) {
     event.preventDefault();
     const headline = adHeadline.trim();
-    const copy = note.trim();
+    const copy = note;
     setCaptureError("");
     if (!headline) {
       setCaptureError("Enter a headline for this ad.");
       return;
     }
-    if (!copy) {
+    if (!copy.trim()) {
       setCaptureError("Write the ad copy.");
       return;
     }
@@ -497,8 +499,8 @@ export default function Home() {
     if (!title) return;
 
     if (editTarget.kind === "ad") {
-      const copy = editNote.trim();
-      if (!copy) {
+      const copy = editNote;
+      if (!copy.trim()) {
         setNotice("Ad copy is required.");
         return;
       }
@@ -831,7 +833,7 @@ export default function Home() {
             <h2 id="modal-title">Build your ad.</h2>
             <p>Write the headline, copy, and an optional image or link.</p>
             <label>Headline<input autoFocus required value={adHeadline} onChange={(e) => { setAdHeadline(e.target.value); setCaptureError(""); }} placeholder="e.g. Wake up slow." maxLength={160} /></label>
-            <label>Ad copy<textarea required value={note} onChange={(e) => { setNote(e.target.value); setCaptureError(""); }} placeholder="The message you want people to remember." rows={4} /></label>
+            <label>Ad copy<textarea required value={note} onChange={(e) => { setNote(e.target.value); setCaptureError(""); }} placeholder="The message you want people to remember." rows={6} /></label>
             <label>Destination URL (optional)<input type="text" value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder="https://brand.com/offer" /></label>
             <AdCreativeField images={adImages} onChange={setAdImages} />
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
@@ -895,7 +897,15 @@ export default function Home() {
               {images.length > 0 ? (
                 <div className="ad-view-gallery">
                   {images.map((src, imageIndex) => (
-                    <img key={`${imageIndex}-${src.slice(0, 48)}`} src={src} alt={`${adTarget.title} creative ${imageIndex + 1}`} />
+                    <button
+                      key={`${imageIndex}-${src.slice(0, 48)}`}
+                      type="button"
+                      className="ad-view-gallery-item"
+                      onClick={() => setImageGallery({ images, index: imageIndex, title: adTarget.title })}
+                      aria-label={`Open image ${imageIndex + 1} in gallery`}
+                    >
+                      <img src={src} alt={`${adTarget.title} creative ${imageIndex + 1}`} />
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -910,6 +920,16 @@ export default function Home() {
           </div>
         );
       })()}
+
+      {imageGallery && (
+        <AdImageGallery
+          images={imageGallery.images}
+          index={imageGallery.index}
+          title={imageGallery.title}
+          onClose={() => setImageGallery(null)}
+          onIndexChange={(index) => setImageGallery((current) => current ? { ...current, index } : current)}
+        />
+      )}
 
       {collectionOpen && <div className="modal-backdrop collection-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setCollectionOpen(false)}>
         <div className="modal collection-modal" role="dialog" aria-modal="true" aria-labelledby="collection-title">
@@ -952,7 +972,7 @@ export default function Home() {
             <span className="modal-icon">✎</span><p className="kicker">{editTarget.kind === "ad" ? "EDIT AD" : "EDIT SCRAP"}</p><h2 id="edit-title">{editTarget.kind === "ad" ? "Revise your ad." : "Tune what you kept."}</h2>
             {editTarget.kind === "ad" ? <>
               <label>Headline<input autoFocus type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
-              <label>Ad copy<textarea required value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={4} /></label>
+              <label>Ad copy<textarea required value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={6} /></label>
               <label>Destination URL (optional)<input type="text" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="https://brand.com/offer" /></label>
               <AdCreativeField images={adImages} onChange={setAdImages} />
             </> : <>

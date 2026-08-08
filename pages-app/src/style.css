@@ -64,7 +64,7 @@ h1 em:after { content:""; position:absolute; height:9px; left:3%; right:1%; bott
 .note { font-size:12px; color:#626155; line-height:1.5; min-height:54px; margin:0 0 15px; }
 .tag { display:inline-block; background:#e9e3d7; padding:5px 9px; border-radius:99px; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
 .tag-kind { background:#f3d6bf; }
-.ad-card .note { font-style: italic; }
+.ad-card .note { font-style: italic; white-space: pre-wrap; }
 .art-static { cursor: default; }
 .ad-image-preview { position:relative; height:120px; border-radius:12px; border:1px solid var(--line); background-size:cover; background-position:center; }
 .ad-creative-field { margin:18px 0 8px; }
@@ -108,9 +108,24 @@ body.player-page{margin:0;padding:12px;background:var(--paper);color:var(--ink)}
 .ad-modal{width:min(760px,100%);max-height:min(92vh,900px);overflow:auto}
 .ad-view-icon{background:#f3d6bf}
 .ad-view-domain{margin:0 0 6px;color:var(--olive);font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-.ad-view-copy{margin:0 0 18px;font-family:Georgia,serif;font-size:18px;line-height:1.5;color:#55554f;font-style:italic}
+.ad-view-copy{margin:0 0 18px;font-family:Georgia,serif;font-size:18px;line-height:1.5;color:#55554f;font-style:italic;white-space:pre-wrap}
 .ad-view-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:0 0 8px}
-.ad-view-gallery img{width:100%;aspect-ratio:4/3;object-fit:cover;border:1.5px solid var(--ink);border-radius:14px 18px 13px 16px;box-shadow:4px 5px 0 rgba(23,23,19,.12)}
+.ad-view-gallery-item{padding:0;border:0;background:transparent;cursor:zoom-in;border-radius:14px 18px 13px 16px;overflow:hidden;box-shadow:4px 5px 0 rgba(23,23,19,.12);transition:transform .16s ease,box-shadow .16s ease}
+.ad-view-gallery-item:hover{transform:translate(-2px,-3px);box-shadow:6px 8px 0 rgba(23,23,19,.14)}
+.ad-view-gallery-item img{width:100%;aspect-ratio:4/3;object-fit:cover;border:1.5px solid var(--ink);display:block}
+.gallery-backdrop{position:fixed;inset:0;z-index:35;background:rgba(10,10,8,.88);backdrop-filter:blur(8px);display:grid;place-items:center;padding:20px;animation:fade .2s}
+.gallery-stage{position:relative;width:min(960px,100%);display:grid;gap:14px;justify-items:center}
+.gallery-frame{margin:0;width:100%;display:grid;gap:10px;justify-items:center}
+.gallery-frame img{max-width:100%;max-height:min(72dvh,820px);object-fit:contain;border:2px solid var(--paper);border-radius:18px;box-shadow:12px 14px 0 rgba(0,0,0,.35)}
+.gallery-frame figcaption{color:#f5f0e7;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.gallery-close{position:absolute;top:-6px;right:0;border:0;background:var(--paper);font-size:30px;line-height:1;cursor:pointer;border-radius:999px;width:40px;height:40px;display:grid;place-items:center;box-shadow:0 0 0 1px var(--line)}
+.gallery-nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:44px;border:2px solid var(--paper);border-radius:999px;background:rgba(23,23,19,.72);color:var(--paper);font-size:28px;line-height:1;cursor:pointer;display:grid;place-items:center}
+.gallery-prev{left:-8px}
+.gallery-next{right:-8px}
+.gallery-thumbs{display:flex;gap:8px;overflow-x:auto;max-width:100%;padding:4px}
+.gallery-thumbs button{flex:0 0 auto;padding:0;border:2px solid transparent;border-radius:10px;background:transparent;cursor:pointer;opacity:.72}
+.gallery-thumbs button.active,.gallery-thumbs button:hover{opacity:1;border-color:var(--coral)}
+.gallery-thumbs img{width:64px;height:48px;object-fit:cover;border-radius:8px;display:block;border:1px solid var(--paper)}
 .ad-view-placeholder{aspect-ratio:16/9;margin:0 0 8px;display:grid;place-items:center;font-family:Georgia,serif;font-size:clamp(32px,6vw,72px);font-weight:700}
 .icon-btn{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid var(--ink);border-radius:8px 10px 7px 11px;font-size:16px;line-height:1;cursor:pointer;box-shadow:2px 3px 0 var(--ink);transition:.16s ease}
 .icon-btn:hover{transform:translate(-1px,-2px);box-shadow:3px 5px 0 var(--ink)}
