@@ -1,5 +1,6 @@
 import type { Bookmark } from "./Page";
 import { createLoad } from "./load-format";
+import { shareFilesNatively } from "./native-share";
 
 const KEEPSEEK_ORIGIN = "https://keepseek-app.vercel.app";
 
@@ -56,13 +57,9 @@ export async function createLoadOpenerHtml(
 }
 
 export async function shareLoadOpenerNatively(opener: { file: File; fileName: string }) {
-  if (!navigator.share) return false;
-  const payload: ShareData & { files?: File[] } = {
-    files: [opener.file],
-    title: opener.fileName,
-    text: "Open this file in your browser to view the shared Keepseek Load.",
-  };
-  if (navigator.canShare && !navigator.canShare(payload)) return false;
-  await navigator.share(payload);
-  return true;
+  return shareFilesNatively(
+    [opener.file],
+    opener.fileName,
+    "Open this file in your browser to view the shared Keepseek Load.",
+  );
 }

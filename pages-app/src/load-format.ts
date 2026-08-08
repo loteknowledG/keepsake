@@ -1,5 +1,6 @@
 import { unzipSync, zipSync, type Zippable } from "fflate";
 import type { Bookmark } from "./Page";
+import { shareFilesNatively } from "./native-share";
 
 export const LOAD_MEDIA_TYPE = "application/vnd.keepseek.muthurload+zip";
 export const MUTHUR_RENDERER_URL = "https://muthur-tawny.vercel.app/";
@@ -210,15 +211,11 @@ export async function createKeepseekLoadBundleLink(bookmark: Bookmark, origin = 
 }
 
 export async function shareLoadBundleNatively(bundle: { file: File; openLink: string; fileName: string }) {
-  if (!navigator.share) return false;
-  const payload: ShareData & { files?: File[] } = {
-    files: [bundle.file],
-    title: bundle.fileName,
-    text: `Open in Keepseek: ${bundle.openLink}`,
-  };
-  if (navigator.canShare && !navigator.canShare(payload)) return false;
-  await navigator.share(payload);
-  return true;
+  return shareFilesNatively(
+    [bundle.file],
+    bundle.fileName,
+    `Open in Keepseek: ${bundle.openLink}`,
+  );
 }
 
 function assertSafeEntries(entries: Record<string, Uint8Array>) {
