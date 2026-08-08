@@ -868,7 +868,7 @@ export default function Home() {
     <main>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Keepseek home">Keepseek</a>
-        <nav aria-label="Primary navigation"><a href="#scraps">Library</a><a href="#scraps">Collections</a><a href="#about">Highlights</a></nav>
+        <nav aria-label="Primary navigation"><a href="#scraps">Library</a><a href="#scraps">Collections</a></nav>
         <button className="avatar" aria-label="Open profile">QL</button>
       </header>
 
@@ -975,8 +975,6 @@ export default function Home() {
           {hydrated && visible.length === 0 && <div className="empty"><span>✦</span><h3>No scraps hiding here.</h3><p>Try another collection or save something new.</p></div>}
         </div>
       </section>
-
-      <section className="how" id="about"><p className="kicker">THE QUIET MAGIC</p><h2>Paste. Pause. Remember.</h2><div className="steps"><div><b>01</b><h3>Drop a link</h3><p>Any article, product, video, or corner of the web.</p></div><div><b>02</b><h3>We gather the pieces</h3><p>Title, image, description, and source appear automatically.</p></div><div><b>03</b><h3>Add what matters</h3><p>Leave a thought in your own words and find it later.</p></div></div></section>
 
       <footer><span className="brand">Keepseek</span><p>Made for curious minds and gloriously open tabs.</p></footer>
 
