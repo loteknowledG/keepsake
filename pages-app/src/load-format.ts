@@ -9,21 +9,6 @@ const MAX_EXPANDED_BYTES = 25 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 10 * 1024 * 1024;
 const MAX_EMBEDDED_LINK_BYTES = 128 * 1024;
 
-export const EMBEDDED_LINK_BYTE_LIMIT = MAX_EMBEDDED_LINK_BYTES;
-
-function stripDataUrl(value?: string): string | undefined {
-  return value?.startsWith("data:") ? undefined : value;
-}
-
-export function slimBookmarkForLink(bookmark: Bookmark): Bookmark {
-  const images = bookmark.images?.map(stripDataUrl).filter((value): value is string => Boolean(value));
-  return {
-    ...bookmark,
-    image: stripDataUrl(bookmark.image),
-    images: images?.length ? images : undefined,
-  };
-}
-
 type LoadObject = {
   path: string;
   mediaType: string;
@@ -127,41 +112,13 @@ function base64url(bytes: Uint8Array) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-export async function createMuthurLink(
-  bookmark: Bookmark,
-  rendererUrl = MUTHUR_RENDERER_URL,
-  options: { slim?: boolean } = {},
-) {
-  const attempts: Bookmark[] = options.slim
-    ? [slimBookmarkForLink(bookmark)]
-    : [bookmark, slimBookmarkForLink(bookmark)];
-
-  let created: Awaited<ReturnType<typeof createLoad>> | null = null;
-  let bytes: Uint8Array | null = null;
-  let slim = false;
-
-  for (const candidate of attempts) {
-    const next = await createLoad(candidate);
-    const nextBytes = new Uint8Array(await next.file.arrayBuffer());
-    if (nextBytes.length <= MAX_EMBEDDED_LINK_BYTES) {
-      created = next;
-      bytes = nextBytes;
-      slim = candidate !== bookmark;
-      break;
-    }
-  }
-
-  if (!created || !bytes) {
-    const probe = await createLoad(bookmark);
-    const size = new Uint8Array(await probe.file.arrayBuffer()).length;
-    throw new Error(
-      `This Load is ${size.toLocaleString()} bytes; embedded links are limited to ${MAX_EMBEDDED_LINK_BYTES.toLocaleString()} bytes even without images. Download the .muthur.load file and send it through Drive, email, or chat instead.`,
-    );
-  }
-
+export async function createMuthurLink(bookmark: Bookmark, rendererUrl = MUTHUR_RENDERER_URL) {
+  const created = await createLoad(bookmark);
+  const bytes = new Uint8Array(await created.file.arrayBuffer());
+  if (bytes.length > MAX_EMBEDDED_LINK_BYTES) throw new Error("This Load is too large for an embedded MUTHUR Link. Download and send the .muthur.load file instead.");
   const url = new URL(rendererUrl);
   url.hash = `load=${base64url(bytes)}&name=${encodeURIComponent(created.fileName)}`;
-  return { ...created, url: url.toString(), bytes: bytes.length, slim };
+  return { ...created, url: url.toString(), bytes: bytes.length };
 }
 
 function assertSafeEntries(entries: Record<string, Uint8Array>) {
