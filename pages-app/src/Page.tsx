@@ -3,7 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, flushKeepsakeData, backupKeepsakeData, loadKeepsakeBackup, type StorageMode } from "./storage";
 import { adDestinationUrl, adDomainFromDestination, adPersistUrl, isAdStorageUrl } from "./ad-url";
-import { createLoad, createMuthurLink, openLoad, type OpenedLoad } from "./load-format";
+import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, parseKeepseekLoadLocation, type OpenedLoad } from "./load-format";
 import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
 import { IoShareSocialOutline } from "react-icons/io5";
@@ -179,8 +179,9 @@ export default function Home() {
   const [loadPreview, setLoadPreview] = useState<OpenedLoad | null>(null);
   const [creatingLoad, setCreatingLoad] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
-  const [sharing, setSharing] = useState<"load" | "link" | null>(null);
+  const [sharing, setSharing] = useState<"load" | "link" | "bundle" | null>(null);
   const [shareLink, setShareLink] = useState("");
+  const [shareLinkKind, setShareLinkKind] = useState<"embedded" | "hosted" | "muthur">("embedded");
   const [editTarget, setEditTarget] = useState<Bookmark | null>(null);
   const [editUrl, setEditUrl] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -190,6 +191,7 @@ export default function Home() {
   const importRef = useRef<HTMLInputElement>(null);
   const loadRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const openedLoadFromUrl = useRef(false);
 
   useEffect(() => {
     let finished = false;
@@ -277,6 +279,34 @@ export default function Home() {
     window.addEventListener("pagehide", onPageHide);
     return () => window.removeEventListener("pagehide", onPageHide);
   }, [bookmarks, userCollections]);
+
+  useEffect(() => {
+    if (!hydrated || openedLoadFromUrl.current) return;
+    const target = parseKeepseekLoadLocation(window.location);
+    if (!target) return;
+    openedLoadFromUrl.current = true;
+    const url = new URL(window.location.href);
+    if (target.kind === "embedded") {
+      url.hash = "";
+    } else {
+      url.searchParams.delete("load");
+      url.searchParams.delete("name");
+    }
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+
+    void (async () => {
+      try {
+        setNotice("Fetching shared Load…");
+        const preview = target.kind === "embedded"
+          ? await openLoadFromBytes(target.bytes, target.fileName)
+          : await fetchLoadFromUrl(target.url, target.fileName);
+        setLoadPreview(preview);
+        setNotice("Shared Load verified. Preview before taking it.");
+      } catch (error) {
+        setNotice(error instanceof Error ? error.message : "That shared Load could not be opened.");
+      }
+    })();
+  }, [hydrated]);
 
   function persistNow(nextBookmarks: Bookmark[], nextCollections: string[] = userCollections) {
     if (!hydrated || !storageReady) return;
@@ -562,14 +592,7 @@ export default function Home() {
     setNotice("Building a verified Load…");
     try {
       const created = await createLoad(bookmark);
-      const downloadUrl = URL.createObjectURL(created.file);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = created.fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
+      downloadLoadFile(created.file);
       setNotice(`${created.fileName} is ready to swap.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Keepseek could not create that Load.");
@@ -580,16 +603,58 @@ export default function Home() {
     }
   }
 
-  function closeShare() { setShareTarget(null); setShareLink(""); }
+  function closeShare() {
+    setShareTarget(null);
+    setShareLink("");
+    setShareLinkKind("embedded");
+  }
+
+  function downloadLoadFile(file: File) {
+    const downloadUrl = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
+  }
+
+  async function shareLoadAndLink(bookmark: Bookmark) {
+    setSharing("bundle");
+    setCreatingLoad(bookmark.id);
+    setNotice("Building Load + open link…");
+    try {
+      const created = await createKeepseekLoadBundleLink(bookmark);
+      downloadLoadFile(created.file);
+      setShareLink(created.openLink);
+      setShareLinkKind(created.linkKind);
+      setNotice(
+        created.linkKind === "hosted"
+          ? `${created.fileName} downloaded. Hosted open link ready (${created.bytes.toLocaleString()} bytes). Send both.`
+          : `${created.fileName} downloaded. Open link ready (${created.bytes.toLocaleString()} bytes). Send both.`,
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Keepseek could not prepare Load + link.");
+    } finally {
+      setCreatingLoad(null);
+      setSharing(null);
+    }
+  }
 
   async function prepareMuthurLink(bookmark: Bookmark) {
-    setSharing("link"); setNotice("Building an embedded MUTHUR Link…");
+    setSharing("link");
+    setNotice("Building an embedded MUTHUR Link…");
     try {
       const created = await createMuthurLink(bookmark);
       setShareLink(created.url);
+      setShareLinkKind("muthur");
       setNotice(`MUTHUR Link ready. Anyone with it can read this ${created.bytes.toLocaleString()}-byte Load.`);
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Keepseek could not create that MUTHUR Link."); }
-    finally { setSharing(null); }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Keepseek could not create that MUTHUR Link.");
+    } finally {
+      setSharing(null);
+    }
   }
 
   async function copyPreparedLink() {
@@ -598,12 +663,12 @@ export default function Home() {
       const clipboard = navigator.clipboard?.writeText(shareLink);
       if (!clipboard) throw new Error("Clipboard API unavailable");
       await Promise.race([clipboard, new Promise((_, reject) => window.setTimeout(() => reject(new Error("Clipboard timed out")), 1_500))]);
-      setNotice("MUTHUR Link copied.");
+      setNotice(shareLinkKind === "muthur" ? "MUTHUR Link copied." : "Open link copied.");
     } catch {
       const field = document.createElement("textarea");
       field.value = shareLink; field.style.position = "fixed"; field.style.opacity = "0"; document.body.appendChild(field); field.select();
       const copied = document.execCommand("copy"); field.remove();
-      setNotice(copied ? "MUTHUR Link copied." : "Copy was blocked. Open the link and copy it from the address bar.");
+      setNotice(copied ? (shareLinkKind === "muthur" ? "MUTHUR Link copied." : "Open link copied.") : "Copy was blocked. Open the link and copy it from the address bar.");
     }
   }
 
@@ -959,9 +1024,19 @@ export default function Home() {
           <button className="close" onClick={closeShare} aria-label="Close">×</button>
           <span className="modal-icon share-icon">↗</span><p className="kicker">SHARE KNOWLEDGE</p><h2 id="share-title">Shoot the Load.</h2><p>{shareTarget.title}</p>
           {!shareLink ? <div className="share-options">
-            <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "muthur.load"}</strong><span>Download the owned, offline `.muthur.load` file.</span></button>
-            <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link"}</strong><span>Create a zero-install browser link. Anyone with it can read this Load.</span></button>
-          </div> : <div className="share-ready"><strong>muthur.link ready</strong><p>This public-by-possession link contains the complete verified Load.</p><a href={shareLink}>Open muthur.link <span>↗</span></a><button onClick={copyPreparedLink}>Copy Link</button></div>}
+            <button onClick={() => shareLoadAndLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "bundle" ? "PACKING…" : "Load + link"}</strong><span>Download `.muthur.load` and get an open link. Send both; the link verifies and previews the Load in Keepseek.</span></button>
+            <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "muthur.load only"}</strong><span>Download the owned, offline `.muthur.load` file with no link.</span></button>
+            <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link"}</strong><span>Embedded browser link for small Loads (under 128 KB).</span></button>
+          </div> : <div className="share-ready">
+            <strong>{shareLinkKind === "muthur" ? "muthur.link ready" : "Load + link ready"}</strong>
+            <p>{shareLinkKind === "muthur"
+              ? "This public-by-possession link contains the complete verified Load in MUTHUR."
+              : shareLinkKind === "hosted"
+                ? "Send the downloaded file and this link. Opening the link fetches and verifies the hosted Load in Keepseek."
+                : "Send the downloaded file and this link. Opening the link verifies and previews the Load in Keepseek."}</p>
+            <a href={shareLink}>{shareLinkKind === "muthur" ? "Open muthur.link" : "Open link"} <span>↗</span></a>
+            <button onClick={copyPreparedLink}>Copy Link</button>
+          </div>}
         </div>
       </div>}
 

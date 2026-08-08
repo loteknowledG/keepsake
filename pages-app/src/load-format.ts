@@ -7,7 +7,8 @@ const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const MAX_EXPANDED_BYTES = 25 * 1024 * 1024;
 const MAX_ENTRY_BYTES = 10 * 1024 * 1024;
-const MAX_EMBEDDED_LINK_BYTES = 128 * 1024;
+export const MAX_EMBEDDED_LINK_BYTES = 128 * 1024;
+export const MAX_HOSTED_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 type LoadObject = {
   path: string;
@@ -112,13 +113,110 @@ function base64url(bytes: Uint8Array) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function base64urlDecode(value: string) {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+  const binary = atob(padded + pad);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+export function buildKeepseekOpenLink(options: {
+  origin: string;
+  fileName: string;
+  embeddedBytes?: Uint8Array;
+  hostedUrl?: string;
+}) {
+  const url = new URL(options.origin.endsWith("/") ? options.origin : `${options.origin}/`);
+  if (options.hostedUrl) {
+    url.searchParams.set("load", options.hostedUrl);
+    url.searchParams.set("name", options.fileName);
+    return url.toString();
+  }
+  if (options.embeddedBytes) {
+    url.hash = `load=${base64url(options.embeddedBytes)}&name=${encodeURIComponent(options.fileName)}`;
+    return url.toString();
+  }
+  throw new Error("Keepseek needs either embedded bytes or a hosted URL to build an open link.");
+}
+
+export async function uploadHostedLoad(file: File, uploadPath = "/api/upload-load") {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (bytes.length > MAX_HOSTED_UPLOAD_BYTES) {
+    throw new Error(`This Load is ${bytes.length.toLocaleString()} bytes. Hosted links support up to ${MAX_HOSTED_UPLOAD_BYTES.toLocaleString()} bytes. Send the downloaded .muthur.load file instead.`);
+  }
+  const response = await fetch(uploadPath, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || LOAD_MEDIA_TYPE,
+      "X-Load-Name": file.name,
+    },
+    body: bytes,
+  });
+  const payload = await response.json().catch(() => null) as { url?: string; error?: string } | null;
+  if (!response.ok || !payload?.url) {
+    throw new Error(payload?.error ?? "Keepseek could not host this Load for a link.");
+  }
+  return payload.url;
+}
+
+export async function openLoadFromBytes(bytes: Uint8Array, fileName: string) {
+  return openLoad(new File([bytes as BlobPart], fileName, { type: LOAD_MEDIA_TYPE }));
+}
+
+export async function fetchLoadFromUrl(sourceUrl: string, fileName: string) {
+  const response = await fetch(sourceUrl);
+  if (!response.ok) throw new Error("Could not fetch the shared Load.");
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  return openLoadFromBytes(bytes, fileName);
+}
+
+export function parseKeepseekLoadLocation(location: Pick<Location, "hash" | "search">) {
+  const hashParams = new URLSearchParams(location.hash.startsWith("#") ? location.hash.slice(1) : location.hash);
+  const embedded = hashParams.get("load");
+  const hashName = hashParams.get("name");
+  if (embedded) {
+    return { kind: "embedded" as const, bytes: base64urlDecode(embedded), fileName: hashName ?? "shared.muthur.load" };
+  }
+  const params = new URLSearchParams(location.search);
+  const remote = params.get("load");
+  const remoteName = params.get("name");
+  if (remote && /^https?:\/\//i.test(remote)) {
+    return { kind: "remote" as const, url: remote, fileName: remoteName ?? "shared.muthur.load" };
+  }
+  return null;
+}
+
 export async function createMuthurLink(bookmark: Bookmark, rendererUrl = MUTHUR_RENDERER_URL) {
   const created = await createLoad(bookmark);
   const bytes = new Uint8Array(await created.file.arrayBuffer());
-  if (bytes.length > MAX_EMBEDDED_LINK_BYTES) throw new Error("This Load is too large for an embedded MUTHUR Link. Download and send the .muthur.load file instead.");
+  if (bytes.length > MAX_EMBEDDED_LINK_BYTES) {
+    throw new Error("This Load is too large for an embedded MUTHUR Link. Use Load + link to download the file and get a hosted open link.");
+  }
   const url = new URL(rendererUrl);
   url.hash = `load=${base64url(bytes)}&name=${encodeURIComponent(created.fileName)}`;
   return { ...created, url: url.toString(), bytes: bytes.length };
+}
+
+export async function createKeepseekLoadBundleLink(bookmark: Bookmark, origin = typeof window === "undefined" ? "https://keepseek-app.vercel.app" : window.location.origin) {
+  const created = await createLoad(bookmark);
+  const bytes = new Uint8Array(await created.file.arrayBuffer());
+  if (bytes.length <= MAX_EMBEDDED_LINK_BYTES) {
+    return {
+      ...created,
+      bytes: bytes.length,
+      linkKind: "embedded" as const,
+      openLink: buildKeepseekOpenLink({ origin, fileName: created.fileName, embeddedBytes: bytes }),
+    };
+  }
+  const hostedUrl = await uploadHostedLoad(created.file);
+  return {
+    ...created,
+    bytes: bytes.length,
+    linkKind: "hosted" as const,
+    openLink: buildKeepseekOpenLink({ origin, fileName: created.fileName, hostedUrl }),
+  };
 }
 
 function assertSafeEntries(entries: Record<string, Uint8Array>) {
