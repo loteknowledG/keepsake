@@ -1,0 +1,17 @@
+---
+description: Always build, commit, and push Keepseek changes to deploy via Vercel
+alwaysApply: true
+---
+
+# Always deploy
+
+After finishing any Keepseek implementation or fix (especially under `pages-app/`):
+
+1. **Build** — `cd pages-app && npm run build`. Fix failures before shipping.
+2. **Commit scope** — Stage only source and config needed for the app (`pages-app/src/**`, `pages-app/vercel.json`, `pages-app/package.json`, etc.). Do not commit `node_modules/`, `dist/`, `.wrangler/`, or `.playwright-cli/`.
+3. **Push** — Commit with a concise message, then `git push` to `main`. Vercel deploys from `main` automatically.
+4. **Confirm** — Tell the user the commit hash and that [keepseek-app.vercel.app](https://keepseek-app.vercel.app) will update shortly.
+
+Skip deploy only when the user explicitly says not to, or when the task was read-only (questions/reviews with no code changes).
+
+If there are no changes to commit, say the branch is already deployed.
