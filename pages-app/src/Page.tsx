@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, flushKeepsakeData, backupKeepsakeData, loadKeepsakeBackup, type StorageMode } from "./storage";
-import { adDestinationUrl, adDomainFromDestination, adPersistUrl, isAdStorageUrl } from "./ad-url";
+import { adDestinationUrl, adDomainFromDestination, adExternalLinkUrl, adPersistUrl, isAdStorageUrl } from "./ad-url";
 import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, openLoadFromSharedPayload, parseKeepseekLoadLocation, shareLoadBundleNatively, type OpenedLoad } from "./load-format";
 import { createLoadOpenerHtml, shareLoadOpenerNatively } from "./load-opener-html";
 import { VscEditCompact } from "react-icons/vsc";
@@ -523,7 +523,7 @@ export default function Home() {
   function openAd(bookmark: Bookmark, viewOnly = false) {
     if (bookmark.kind !== "ad") return;
     setAdViewOnly(viewOnly);
-    setAdTarget(bookmark);
+    setAdTarget(repairAdBookmark(bookmark));
   }
 
   function presentOpenedLoad(opened: OpenedLoad, viewMode: boolean) {
@@ -1077,7 +1077,7 @@ export default function Home() {
 
       {adTarget && (() => {
         const images = bookmarkImages(adTarget);
-        const linked = scrapHasLink(adTarget);
+        const adLink = adExternalLinkUrl(adTarget.url);
         return (
           <div className="modal-backdrop ad-backdrop" onMouseDown={(e) => e.target === e.currentTarget && (setAdTarget(null), setAdViewOnly(false))}>
             <div className="modal ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-title">
@@ -1105,7 +1105,7 @@ export default function Home() {
                 <div className={`ad-view-placeholder art ${adTarget.palette}`} aria-hidden="true"><span>{adTarget.mark}</span></div>
               )}
               <div className="player-actions">
-                {linked && <a href={adTarget.url} target="_blank" rel="noreferrer">Open link <span>↗</span></a>}
+                {adLink && <a href={adLink} target="_blank" rel="noreferrer">Open link <span>↗</span></a>}
                 {!adViewOnly && <button type="button" onClick={() => { setAdTarget(null); setAdViewOnly(false); startEdit(adTarget); }}>Edit ad</button>}
                 <button type="button" onClick={() => { setAdTarget(null); setAdViewOnly(false); }}>Close</button>
               </div>

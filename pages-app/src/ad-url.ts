@@ -1,5 +1,8 @@
 export function isAdStorageUrl(url: string): boolean {
-  return /^keepseek:\/\/ad\/\d+$/i.test(url.trim());
+  const trimmed = url.trim();
+  if (/^keepseek:\/\/ad\/\d+$/i.test(trimmed)) return true;
+  if (/^https?:\/\/keepseek(?::\/\/|\/+\/)ad\/\d+$/i.test(trimmed)) return true;
+  return false;
 }
 
 export function adStorageUrl(id: number): string {
@@ -8,13 +11,30 @@ export function adStorageUrl(id: number): string {
 
 export function adDestinationUrl(url: string): string {
   if (isAdStorageUrl(url)) return "";
-  return url.trim();
+  const trimmed = url.trim();
+  if (/^keepseek:/i.test(trimmed)) return "";
+  return trimmed;
 }
 
 export function adPersistUrl(id: number, destination: string): string {
   const trimmed = destination.trim();
-  if (!trimmed) return adStorageUrl(id);
+  if (!trimmed || isAdStorageUrl(trimmed) || /^keepseek:/i.test(trimmed)) {
+    return adStorageUrl(id);
+  }
   return trimmed.match(/^https?:\/\//) ? trimmed : `https://${trimmed}`;
+}
+
+export function adExternalLinkUrl(url: string): string | null {
+  const destination = adDestinationUrl(url);
+  if (!destination) return null;
+  try {
+    const normalized = destination.match(/^https?:\/\//) ? destination : `https://${destination}`;
+    const parsed = new URL(normalized);
+    if (!/^https?:$/i.test(parsed.protocol)) return null;
+    return normalized;
+  } catch {
+    return null;
+  }
 }
 
 export function adDomainFromDestination(destination: string): string {
