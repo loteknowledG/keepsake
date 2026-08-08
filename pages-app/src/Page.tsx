@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { openKeepsakeDatabase, saveKeepsakeData, flushKeepsakeData, backupKeepsakeData, loadKeepsakeBackup, type StorageMode } from "./storage";
 import { adDestinationUrl, adDomainFromDestination, adPersistUrl, isAdStorageUrl } from "./ad-url";
 import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, parseKeepseekLoadLocation, shareLoadBundleNatively, type OpenedLoad } from "./load-format";
+import { createLoadOpenerHtml, shareLoadOpenerNatively } from "./load-opener-html";
 import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
 import { IoShareSocialOutline } from "react-icons/io5";
@@ -179,7 +180,7 @@ export default function Home() {
   const [loadPreview, setLoadPreview] = useState<OpenedLoad | null>(null);
   const [creatingLoad, setCreatingLoad] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
-  const [sharing, setSharing] = useState<"load" | "link" | "bundle" | null>(null);
+  const [sharing, setSharing] = useState<"load" | "link" | "bundle" | "openfile" | null>(null);
   const [shareLink, setShareLink] = useState("");
   const [shareLinkKind, setShareLinkKind] = useState<"embedded" | "companion" | "muthur">("embedded");
   const [pendingCompanionLoad, setPendingCompanionLoad] = useState<{ fileName: string; rootHash: string } | null>(null);
@@ -628,6 +629,33 @@ export default function Home() {
     window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
   }
 
+  async function shareOpenFile(bookmark: Bookmark) {
+    setSharing("openfile");
+    setCreatingLoad(bookmark.id);
+    setNotice("Building one open file…");
+    try {
+      const opener = await createLoadOpenerHtml(bookmark);
+      let sharedNatively = false;
+      try {
+        sharedNatively = await shareLoadOpenerNatively(opener);
+      } catch {
+        sharedNatively = false;
+      }
+      if (!sharedNatively) downloadLoadFile(opener.file);
+      setNotice(
+        sharedNatively
+          ? `Shared ${opener.fileName} (${opener.bytes.toLocaleString()} bytes). Opening it verifies and shows the Load.`
+          : `${opener.fileName} downloaded (${opener.bytes.toLocaleString()} bytes). Send this one file — double-click to open the Load.`,
+      );
+      closeShare();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Keepseek could not create that open file.");
+    } finally {
+      setCreatingLoad(null);
+      setSharing(null);
+    }
+  }
+
   async function shareLoadAndLink(bookmark: Bookmark) {
     setSharing("bundle");
     setCreatingLoad(bookmark.id);
@@ -1050,6 +1078,7 @@ export default function Home() {
           <button className="close" onClick={closeShare} aria-label="Close">×</button>
           <span className="modal-icon share-icon">↗</span><p className="kicker">SHARE KNOWLEDGE</p><h2 id="share-title">Shoot the Load.</h2><p>{shareTarget.title}</p>
           {!shareLink ? <div className="share-options">
+            <button onClick={() => shareOpenFile(shareTarget)} disabled={sharing !== null}><strong>{sharing === "openfile" ? "PACKING…" : "One open file"}</strong><span>One `.muthur.open.html` file with the Load inside. Send it; opening the file verifies and shows the Load.</span></button>
             <button onClick={() => shareLoadAndLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "bundle" ? "PACKING…" : "Load + link"}</strong><span>Share the `.muthur.load` file and an open link together. No hosting — the link opens the Load you send.</span></button>
             <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "muthur.load only"}</strong><span>Download the owned, offline `.muthur.load` file with no link.</span></button>
             <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link"}</strong><span>Embedded browser link for small Loads (under 128 KB).</span></button>

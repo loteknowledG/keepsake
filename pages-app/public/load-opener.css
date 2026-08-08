@@ -1,0 +1,123 @@
+:root {
+  color-scheme: light;
+  --ink: #171713;
+  --paper: #f6f1e7;
+  --line: #d8d0c0;
+  --olive: #6f715f;
+  --green: #b8d99e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+main {
+  width: min(720px, calc(100% - 32px));
+  margin: 32px auto 48px;
+}
+
+.kicker {
+  margin: 0 0 8px;
+  color: var(--olive);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 0.95;
+}
+
+.lede,
+.meta,
+.note {
+  color: #55554f;
+  line-height: 1.5;
+}
+
+.note {
+  white-space: pre-wrap;
+  margin: 18px 0 0;
+  font-size: 1.05rem;
+}
+
+.proof {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin: 24px 0;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.proof small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--green);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+}
+
+.proof code {
+  font-size: 12px;
+}
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.gallery img {
+  width: 100%;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  display: block;
+  box-shadow: 4px 5px 0 rgba(23, 23, 19, 0.12);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.actions a,
+.actions button {
+  border: 1.5px solid var(--ink);
+  border-radius: 11px;
+  padding: 12px 16px;
+  background: var(--green);
+  color: var(--ink);
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 3px 4px 0 var(--ink);
+}
+
+.actions button.secondary {
+  background: var(--paper);
+}
+
+.error {
+  border: 1.5px solid #8d342c;
+  background: #f8e5df;
+  border-radius: 14px;
+  padding: 16px;
+}
