@@ -89,12 +89,22 @@ function defaultNoteFor(kind: AddKind): string {
   }
 }
 
-function brandMark(brand: string): string {
-  const trimmed = brand.trim();
+function brandMark(text: string): string {
+  const trimmed = text.trim();
   if (!trimmed) return "Ad";
   const words = trimmed.split(/\s+/).filter(Boolean);
   if (words.length >= 2) return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
   return trimmed.slice(0, 2).toUpperCase();
+}
+
+function adDomainLabel(destination: string): string {
+  const trimmed = destination.trim();
+  if (!trimmed) return "Ad";
+  try {
+    return new URL(normalizeDestinationUrl(trimmed)).hostname.replace(/^www\./, "");
+  } catch {
+    return "Ad";
+  }
 }
 
 function normalizeDestinationUrl(raw: string): string {
@@ -135,7 +145,6 @@ export default function Home() {
   const [step, setStep] = useState<"url" | "player" | "details" | "compose">("url");
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
-  const [adBrand, setAdBrand] = useState("");
   const [adHeadline, setAdHeadline] = useState("");
   const [adImage, setAdImage] = useState("");
   const [collection, setCollection] = useState("Inspiration");
@@ -269,14 +278,9 @@ export default function Home() {
 
   function saveAdCompose(event: FormEvent) {
     event.preventDefault();
-    const brand = adBrand.trim();
     const headline = adHeadline.trim();
     const copy = note.trim();
     setCaptureError("");
-    if (!brand) {
-      setCaptureError("Enter a brand or campaign name.");
-      return;
-    }
     if (!headline) {
       setCaptureError("Enter a headline for this ad.");
       return;
@@ -303,12 +307,12 @@ export default function Home() {
     const saved: Bookmark = {
       id: Date.now(),
       url: destination,
-      domain: brand,
+      domain: adDomainLabel(destination),
       title: headline,
       note: copy,
       collection: finalCollection,
       palette: palettes[bookmarks.length % palettes.length],
-      mark: brandMark(brand),
+      mark: brandMark(headline),
       kind: "ad",
       image: adImage || undefined,
     };
@@ -357,7 +361,6 @@ export default function Home() {
     setStep(kind === "ad" ? "compose" : "url");
     setUrl("");
     setNote("");
-    setAdBrand("");
     setAdHeadline("");
     setAdImage("");
     setCaptured(null);
@@ -372,7 +375,6 @@ export default function Home() {
     setStep("url");
     setUrl("");
     setNote("");
-    setAdBrand("");
     setAdHeadline("");
     setAdImage("");
     setCaptured(null);
@@ -392,8 +394,6 @@ export default function Home() {
     setEditNote(bookmark.note);
     setEditCollection(bookmark.collection);
     if (bookmark.kind === "ad") {
-      setAdBrand(bookmark.domain);
-      setAdHeadline(bookmark.title);
       setAdImage(bookmark.image ?? "");
     }
   }
@@ -405,10 +405,9 @@ export default function Home() {
     if (!title) return;
 
     if (editTarget.kind === "ad") {
-      const brand = adBrand.trim();
       const copy = editNote.trim();
-      if (!brand || !copy) {
-        setNotice("Brand and ad copy are required.");
+      if (!copy) {
+        setNotice("Ad copy is required.");
         return;
       }
       let destination = "";
@@ -424,8 +423,8 @@ export default function Home() {
       setBookmarks((items) => items.map((item) => item.id === editTarget.id ? {
         ...item,
         url: destination,
-        domain: brand,
-        mark: brandMark(brand),
+        domain: adDomainLabel(destination),
+        mark: brandMark(title),
         title,
         note: copy,
         collection: editCollection,
@@ -660,7 +659,7 @@ export default function Home() {
                 </button>
                 <button type="button" role="menuitem" onClick={() => openAdd("ad")}>
                   <strong>Ad</strong>
-                  <span>Create a campaign, headline, and creative.</span>
+                  <span>Headline, copy, and optional creative.</span>
                 </button>
               </div>
             )}
@@ -730,9 +729,8 @@ export default function Home() {
             <span className="modal-icon">◎</span>
             <p className="kicker">CREATE AD</p>
             <h2 id="modal-title">Build your ad.</h2>
-            <p>Write the campaign yourself — brand, headline, copy, and an optional image or link.</p>
-            <label>Brand or campaign<input autoFocus required value={adBrand} onChange={(e) => { setAdBrand(e.target.value); setCaptureError(""); }} placeholder="e.g. Northwind Coffee" maxLength={80} /></label>
-            <label>Headline<input required value={adHeadline} onChange={(e) => { setAdHeadline(e.target.value); setCaptureError(""); }} placeholder="e.g. Wake up slow." maxLength={160} /></label>
+            <p>Write the headline, copy, and an optional image or link.</p>
+            <label>Headline<input autoFocus required value={adHeadline} onChange={(e) => { setAdHeadline(e.target.value); setCaptureError(""); }} placeholder="e.g. Wake up slow." maxLength={160} /></label>
             <label>Ad copy<textarea required value={note} onChange={(e) => { setNote(e.target.value); setCaptureError(""); }} placeholder="The message you want people to remember." rows={4} /></label>
             <label>Destination URL (optional)<input type="text" value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder="https://brand.com/offer" /></label>
             <label>Creative image (optional)<input type="file" accept="image/*" onChange={pickAdImage} />{adImage && <div className="ad-image-preview" style={{ backgroundImage: `url(${adImage})` }} role="img" aria-label="Ad creative preview" />}</label>
@@ -822,8 +820,7 @@ export default function Home() {
           <form onSubmit={saveEdit}>
             <span className="modal-icon">✎</span><p className="kicker">{editTarget.kind === "ad" ? "EDIT AD" : "EDIT SCRAP"}</p><h2 id="edit-title">{editTarget.kind === "ad" ? "Revise your ad." : "Tune what you kept."}</h2>
             {editTarget.kind === "ad" ? <>
-              <label>Brand or campaign<input autoFocus type="text" required value={adBrand} onChange={(e) => setAdBrand(e.target.value)} maxLength={80} /></label>
-              <label>Headline<input type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
+              <label>Headline<input autoFocus type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
               <label>Ad copy<textarea required value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={4} /></label>
               <label>Destination URL (optional)<input type="text" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="https://brand.com/offer" /></label>
               <label>Creative image (optional)<input type="file" accept="image/*" onChange={pickAdImage} />{adImage && <div className="ad-image-preview" style={{ backgroundImage: `url(${adImage})` }} role="img" aria-label="Ad creative preview" />}</label>
