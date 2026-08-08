@@ -144,6 +144,14 @@ export async function openLoadFromBytes(bytes: Uint8Array, fileName: string) {
   return openLoad(new File([bytes as BlobPart], fileName, { type: LOAD_MEDIA_TYPE }));
 }
 
+export async function openLoadFromSharedPayload(payload: { load: string; fileName?: string; root?: string }) {
+  const preview = await openLoadFromBytes(base64urlDecode(payload.load), payload.fileName || "shared.muthur.load");
+  if (payload.root && preview.manifest.hashing.root !== payload.root) {
+    throw new Error("Shared Load root hash does not match.");
+  }
+  return preview;
+}
+
 export async function fetchLoadFromUrl(sourceUrl: string, fileName: string) {
   const response = await fetch(sourceUrl);
   if (!response.ok) throw new Error("Could not fetch the shared Load.");
@@ -168,6 +176,9 @@ export function parseKeepseekLoadLocation(location: Pick<Location, "hash" | "sea
       rootHash,
       viewMode,
     };
+  }
+  if (hashParams.has("receive-load")) {
+    return { kind: "receive" as const, viewMode: true };
   }
   const params = new URLSearchParams(location.search);
   const remote = params.get("load");

@@ -92,7 +92,7 @@
 
   function renderLoad(opened, payload) {
     const images = bookmarkImages(opened.bookmark);
-    const embeddedLink = KEEPSEEK_URL + "#load=" + payload.load + "&name=" + encodeURIComponent(opened.fileName) + "&view=1";
+    const keepseekOrigin = (payload.keepseekOrigin || KEEPSEEK_URL).replace(/\/?$/, "/");
 
     app.innerHTML =
       '<main>' +
@@ -103,8 +103,27 @@
       (opened.bookmark.note ? '<p class="note">' + escapeHtml(opened.bookmark.note) + "</p>" : "") +
       (images.length ? '<div class="gallery">' + images.map((src) => '<img src="' + escapeHtml(src) + '" alt="">').join("") + "</div>" : "") +
       (opened.content ? '<pre class="note">' + escapeHtml(opened.content.slice(0, 1600)) + "</pre>" : "") +
-      '<div class="actions"><a href="' + escapeHtml(embeddedLink) + '">Open in Keepseek</a>' +
+      '<div class="actions"><button type="button" id="open-keepseek">Open in Keepseek</button>' +
       '<button type="button" class="secondary" id="download-load">Download .muthur.load</button></div></main>';
+
+    document.getElementById("open-keepseek")?.addEventListener("click", () => {
+      const receiver = window.open(keepseekOrigin + "#receive-load&view=1", "_blank");
+      if (!receiver) {
+        window.alert("Allow pop-ups, then click Open in Keepseek again.");
+        return;
+      }
+      const message = { type: "keepseek-shared-load", payload: payload };
+      const send = () => {
+        try {
+          receiver.postMessage(message, keepseekOrigin.replace(/\/$/, ""));
+        } catch {
+          receiver.postMessage(message, "*");
+        }
+      };
+      window.setTimeout(send, 300);
+      window.setTimeout(send, 1000);
+      window.setTimeout(send, 2500);
+    });
 
     document.getElementById("download-load")?.addEventListener("click", () => {
       const bytes = base64urlDecode(payload.load);

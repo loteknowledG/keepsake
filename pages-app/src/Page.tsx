@@ -3,7 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, flushKeepsakeData, backupKeepsakeData, loadKeepsakeBackup, type StorageMode } from "./storage";
 import { adDestinationUrl, adDomainFromDestination, adPersistUrl, isAdStorageUrl } from "./ad-url";
-import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, parseKeepseekLoadLocation, shareLoadBundleNatively, type OpenedLoad } from "./load-format";
+import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, openLoadFromSharedPayload, parseKeepseekLoadLocation, shareLoadBundleNatively, type OpenedLoad } from "./load-format";
 import { createLoadOpenerHtml, shareLoadOpenerNatively } from "./load-opener-html";
 import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
@@ -196,6 +196,7 @@ export default function Home() {
   const loadRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const openedLoadFromUrl = useRef(false);
+  const receivedSharedLoad = useRef(false);
 
   useEffect(() => {
     let finished = false;
@@ -290,7 +291,7 @@ export default function Home() {
     if (!target) return;
     openedLoadFromUrl.current = true;
     const url = new URL(window.location.href);
-    if (target.kind === "embedded" || target.kind === "companion") {
+    if (target.kind === "embedded" || target.kind === "companion" || target.kind === "receive") {
       url.hash = "";
     } else {
       url.searchParams.delete("load");
@@ -305,6 +306,11 @@ export default function Home() {
       return;
     }
 
+    if (target.kind === "receive") {
+      setNotice("Waiting for shared Load from package…");
+      return;
+    }
+
     void (async () => {
       try {
         setNotice("Fetching shared Load…");
@@ -316,6 +322,36 @@ export default function Home() {
         setNotice(error instanceof Error ? error.message : "That shared Load could not be opened.");
       }
     })();
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    async function acceptSharedLoadPayload(payload: { load?: string; fileName?: string; root?: string }) {
+      if (!payload?.load || receivedSharedLoad.current) return;
+      receivedSharedLoad.current = true;
+      try {
+        setNotice("Opening shared Load in view mode…");
+        presentOpenedLoad(await openLoadFromSharedPayload({
+          load: payload.load,
+          fileName: payload.fileName,
+          root: payload.root,
+        }), true);
+      } catch (error) {
+        receivedSharedLoad.current = false;
+        setNotice(error instanceof Error ? error.message : "That shared Load could not be opened.");
+      }
+    }
+
+    function onMessage(event: MessageEvent) {
+      if (event.data?.type !== "keepseek-shared-load") return;
+      const trustedOrigin = event.origin === window.location.origin || event.origin === "null" || event.origin.startsWith("file:");
+      if (!trustedOrigin) return;
+      void acceptSharedLoadPayload(event.data.payload);
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
   }, [hydrated]);
 
   function persistNow(nextBookmarks: Bookmark[], nextCollections: string[] = userCollections) {
@@ -780,11 +816,11 @@ export default function Home() {
 
   function takeLoad() {
     if (!loadPreview) return;
-    const incoming: Bookmark = {
+    const incoming = repairAdBookmark({
       ...loadPreview.bookmark,
       id: Date.now(),
       kind: normalizeScrapKind(loadPreview.bookmark.kind, loadPreview.bookmark.collection),
-    };
+    });
     setBookmarks((current) => {
       const byUrl = new Map(current.map((item) => [item.url, item]));
       byUrl.set(incoming.url, incoming);
@@ -793,6 +829,7 @@ export default function Home() {
     setUserCollections((current) => current.includes(incoming.collection) ? current : [...current, incoming.collection]);
     setActive(incoming.collection);
     setLoadPreview(null);
+    setLoadViewOnly(false);
     setNotice(`Took ${loadPreview.fileName} into Keepseek.`);
   }
 

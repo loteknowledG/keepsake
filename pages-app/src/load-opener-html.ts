@@ -28,6 +28,7 @@ export async function createLoadOpenerHtml(bookmark: Bookmark) {
     fileName: created.fileName,
     load: base64url(bytes),
     root: created.manifest.hashing.root,
+    keepseekOrigin: origin,
   });
   const html = `<!DOCTYPE html>
 <html lang="en">
