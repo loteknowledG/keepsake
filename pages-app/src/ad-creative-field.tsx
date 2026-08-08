@@ -5,14 +5,47 @@ type AdCreativeFieldProps = {
   onChange: (images: string[]) => void;
 };
 
-async function readImageFiles(files: FileList | File[]): Promise<string[]> {
-  const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
-  return Promise.all(imageFiles.map((file) => new Promise<string>((resolve, reject) => {
+const MAX_IMAGE_EDGE = 1400;
+const JPEG_QUALITY = 0.82;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ""));
     reader.onerror = () => reject(reader.error ?? new Error("Could not read image file."));
     reader.readAsDataURL(file);
-  })));
+  });
+}
+
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Could not decode image file."));
+    image.src = dataUrl;
+  });
+}
+
+async function compressImageFile(file: File): Promise<string> {
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = await loadImage(dataUrl);
+  const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  if (scale >= 1 && file.type === "image/jpeg") return dataUrl;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) return dataUrl;
+  context.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+}
+
+async function readImageFiles(files: FileList | File[]): Promise<string[]> {
+  const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
+  return Promise.all(imageFiles.map((file) => compressImageFile(file)));
 }
 
 export default function AdCreativeField({ images, onChange }: AdCreativeFieldProps) {

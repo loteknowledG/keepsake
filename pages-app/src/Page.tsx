@@ -1,7 +1,8 @@
 "use client";
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { openKeepsakeDatabase, saveKeepsakeData, type StorageMode } from "./storage";
+import { openKeepsakeDatabase, saveKeepsakeData, flushKeepsakeData, backupKeepsakeData, loadKeepsakeBackup, type StorageMode } from "./storage";
+import { adDestinationUrl, adDomainFromDestination, adPersistUrl, isAdStorageUrl } from "./ad-url";
 import { createLoad, createMuthurLink, openLoad, type OpenedLoad } from "./load-format";
 import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
@@ -110,13 +111,7 @@ function brandMark(text: string): string {
 }
 
 function adDomainLabel(destination: string): string {
-  const trimmed = destination.trim();
-  if (!trimmed) return "Ad";
-  try {
-    return new URL(normalizeDestinationUrl(trimmed)).hostname.replace(/^www\./, "");
-  } catch {
-    return "Ad";
-  }
+  return adDomainFromDestination(destination);
 }
 
 function normalizeDestinationUrl(raw: string): string {
@@ -126,7 +121,18 @@ function normalizeDestinationUrl(raw: string): string {
 }
 
 function scrapHasLink(bookmark: Bookmark): boolean {
+  if (isAdStorageUrl(bookmark.url)) return false;
   return /^https?:\/\//i.test(bookmark.url.trim());
+}
+
+function repairAdBookmark(bookmark: Bookmark): Bookmark {
+  if (bookmark.kind !== "ad") return bookmark;
+  const destination = adDestinationUrl(bookmark.url);
+  return {
+    ...bookmark,
+    url: adPersistUrl(bookmark.id, destination),
+    domain: adDomainFromDestination(destination),
+  };
 }
 
 function metadataFor(rawUrl: string) {
@@ -144,7 +150,7 @@ function metadataFor(rawUrl: string) {
 }
 
 export default function Home() {
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>(starterBookmarks);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [userCollections, setUserCollections] = useState<string[]>(defaultCollections);
   const [hydrated, setHydrated] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -187,12 +193,26 @@ export default function Home() {
     openKeepsakeDatabase().then(async (stored) => {
       const legacyBookmarks = window.localStorage.getItem("keepsake-bookmarks");
       const legacyCollections = window.localStorage.getItem("keepsake-collections");
-      const nextBookmarks = (stored.bookmarks.length ? stored.bookmarks : legacyBookmarks ? JSON.parse(legacyBookmarks) : starterBookmarks)
+      const backup = loadKeepsakeBackup();
+      const nextBookmarks = (stored.bookmarks.length
+        ? stored.bookmarks
+        : backup?.bookmarks.length
+          ? backup.bookmarks
+          : legacyBookmarks
+            ? JSON.parse(legacyBookmarks)
+            : starterBookmarks)
         .map((item: Bookmark) => ({
           ...item,
           kind: normalizeScrapKind(item.kind, item.collection),
-        }));
-      const nextCollections = stored.collections.length ? stored.collections : legacyCollections ? JSON.parse(legacyCollections) : defaultCollections;
+        }))
+        .map(repairAdBookmark);
+      const nextCollections = stored.collections.length
+        ? stored.collections
+        : backup?.collections.length
+          ? backup.collections
+          : legacyCollections
+            ? JSON.parse(legacyCollections)
+            : defaultCollections;
       setBookmarks(nextBookmarks);
       setUserCollections(nextCollections);
       setStorageMode(stored.mode);
@@ -204,8 +224,19 @@ export default function Home() {
       setStorageReady(true);
       setHydrated(true);
     }).catch(() => {
-      setNotice("SQLite could not start in this browser. JSON export is still available.");
+      const backup = loadKeepsakeBackup();
+      const nextBookmarks = (backup?.bookmarks.length ? backup.bookmarks : starterBookmarks)
+        .map((item: Bookmark) => ({
+          ...item,
+          kind: normalizeScrapKind(item.kind, item.collection),
+        }))
+        .map(repairAdBookmark);
+      const nextCollections = backup?.collections.length ? backup.collections : defaultCollections;
+      setBookmarks(nextBookmarks);
+      setUserCollections(nextCollections);
+      setStorageReady(true);
       setHydrated(true);
+      setNotice("SQLite could not start. Changes are saved to this browser's local backup.");
     });
   }, []);
 
@@ -213,6 +244,22 @@ export default function Home() {
     if (!hydrated || !storageReady) return;
     saveKeepsakeData(bookmarks, userCollections).catch(() => setNotice("SQLite could not save that change. Export a JSON backup."));
   }, [bookmarks, userCollections, hydrated, storageReady]);
+
+  useEffect(() => {
+    function onPageHide() {
+      backupKeepsakeData(bookmarks, userCollections);
+      void flushKeepsakeData();
+    }
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [bookmarks, userCollections]);
+
+  function persistNow(nextBookmarks: Bookmark[], nextCollections: string[] = userCollections) {
+    if (!hydrated || !storageReady) return;
+    void saveKeepsakeData(nextBookmarks, nextCollections).catch(() => {
+      setNotice("Could not save to SQLite. A local browser backup was kept.");
+    });
+  }
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -314,12 +361,13 @@ export default function Home() {
     }
     const palettes = ["sunset", "grid", "violet", "coral", "garden"];
     const finalCollection = collection || defaultCollectionFor("ad");
-    if (!userCollections.includes(finalCollection)) {
-      setUserCollections((items) => [...items, finalCollection]);
-    }
+    const nextCollections = userCollections.includes(finalCollection)
+      ? userCollections
+      : [...userCollections, finalCollection];
+    const newId = Date.now();
     const saved: Bookmark = {
-      id: Date.now(),
-      url: destination,
+      id: newId,
+      url: adPersistUrl(newId, destination),
       domain: adDomainLabel(destination),
       title: headline,
       note: copy,
@@ -330,9 +378,12 @@ export default function Home() {
       image: adImages[0],
       images: adImages.length ? adImages : undefined,
     };
-    setBookmarks((items) => [saved, ...items]);
+    const nextBookmarks = [saved, ...bookmarks];
+    if (nextCollections.length !== userCollections.length) setUserCollections(nextCollections);
+    setBookmarks(nextBookmarks);
     setActive(finalCollection);
     setNotice(`Created ${headline}.`);
+    persistNow(nextBookmarks, nextCollections);
     closeModal();
   }
 
@@ -441,7 +492,7 @@ export default function Home() {
       }
       setBookmarks((items) => items.map((item) => item.id === editTarget.id ? {
         ...item,
-        url: destination,
+        url: adPersistUrl(editTarget.id, destination),
         domain: adDomainLabel(destination),
         mark: brandMark(title),
         title,
@@ -654,6 +705,7 @@ export default function Home() {
               type="button"
               aria-expanded={addMenuOpen}
               aria-haspopup="menu"
+              disabled={!hydrated}
               onClick={() => setAddMenuOpen((value) => !value)}
             >
               <span>＋</span> Add <span className="add-chevron" aria-hidden="true">{addMenuOpen ? "▴" : "▾"}</span>
@@ -698,7 +750,9 @@ export default function Home() {
           <button className="new-collection" onClick={() => setCollectionOpen(true)}>＋ New collection</button>
         </div>
         <div className="card-grid">
-          {visible.map((bookmark, index) => {
+          {!hydrated ? (
+            <div className="empty"><span>◷</span><h3>Loading your library…</h3><p>Fetching scraps saved on this device.</p></div>
+          ) : visible.map((bookmark, index) => {
             const isAd = bookmark.kind === "ad";
             const playable = bookmark.kind === "playlist" && (canPlayMedia(bookmark.url) || bookmark.collection === "Playlists");
             const linked = !isAd && scrapHasLink(bookmark);
@@ -736,7 +790,7 @@ export default function Home() {
               </div>
             </article>
           );})}
-          {visible.length === 0 && <div className="empty"><span>✦</span><h3>No scraps hiding here.</h3><p>Try another collection or save something new.</p></div>}
+          {hydrated && visible.length === 0 && <div className="empty"><span>✦</span><h3>No scraps hiding here.</h3><p>Try another collection or save something new.</p></div>}
         </div>
       </section>
 

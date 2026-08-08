@@ -1,6 +1,10 @@
 import initSqlJs, { type Database } from "sql.js";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import type { Bookmark } from "./Page";
+import { adDestinationUrl, adDomainFromDestination, adPersistUrl } from "./ad-url";
+import { backupKeepsakeData, loadKeepsakeBackup } from "./keepseek-backup";
+
+export { backupKeepsakeData, loadKeepsakeBackup };
 
 function parseImages(value: unknown): string[] | undefined {
   if (!value || typeof value !== "string") return undefined;
@@ -12,8 +16,26 @@ function parseImages(value: unknown): string[] | undefined {
   }
 }
 
+function repairAdBookmark(bookmark: Bookmark): Bookmark {
+  if (bookmark.kind !== "ad") return bookmark;
+  const destination = adDestinationUrl(bookmark.url);
+  return {
+    ...bookmark,
+    url: adPersistUrl(bookmark.id, destination),
+    domain: adDomainFromDestination(destination),
+  };
+}
+
+function prepareBookmarksForStorage(bookmarks: Bookmark[]): Bookmark[] {
+  return bookmarks.map(repairAdBookmark);
+}
+
 function serializeImages(images: string[] | undefined): string | null {
   return images?.length ? JSON.stringify(images) : null;
+}
+
+export function flushKeepsakeData(): Promise<void> {
+  return writeQueue;
 }
 
 export type StorageMode = "opfs" | "indexeddb";
@@ -25,6 +47,7 @@ const DATABASE_KEY = "keepsake.db";
 
 let fallbackDatabase: Database | null = null;
 let storageMode: StorageMode = "indexeddb";
+let sqliteEnabled = true;
 let writeQueue: Promise<void> = Promise.resolve();
 let requestId = 0;
 const pending = new Map<number, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>();
@@ -124,7 +147,8 @@ function loadFallbackData(): KeepsakeData {
           : row.collection === "Ads"
             ? "ad"
             : "bookmark",
-    })) as Bookmark[];
+    }))
+    .map((row) => repairAdBookmark(row as Bookmark));
   const collections = rows<{ name: string }>(fallbackDatabase.exec("SELECT name FROM collections ORDER BY position")).map((row) => row.name);
   return { bookmarks, collections, mode: "indexeddb" };
 }
@@ -137,14 +161,28 @@ export async function openKeepsakeDatabase(): Promise<KeepsakeData> {
   } catch (error) {
     console.warn("OPFS unavailable; using the IndexedDB SQLite fallback.", error);
     storageMode = "indexeddb";
-    return openIndexedDbFallback();
+    try {
+      return await openIndexedDbFallback();
+    } catch (fallbackError) {
+      sqliteEnabled = false;
+      console.warn("SQLite unavailable; using local backup only.", fallbackError);
+      const backup = loadKeepsakeBackup();
+      return {
+        bookmarks: backup?.bookmarks ?? [],
+        collections: backup?.collections ?? [],
+        mode: "indexeddb" as const,
+      };
+    }
   }
 }
 
 export function saveKeepsakeData(bookmarks: Bookmark[], collections: string[]): Promise<void> {
-  writeQueue = writeQueue.then(async () => {
+  const normalizedBookmarks = prepareBookmarksForStorage(bookmarks);
+  backupKeepsakeData(normalizedBookmarks, collections);
+  if (!sqliteEnabled) return Promise.resolve();
+  writeQueue = writeQueue.catch(() => undefined).then(async () => {
     if (storageMode === "opfs") {
-      await callWorker("save", { bookmarks, collections });
+      await callWorker("save", { bookmarks: normalizedBookmarks, collections });
       return;
     }
     if (!fallbackDatabase) return;
@@ -153,7 +191,7 @@ export function saveKeepsakeData(bookmarks: Bookmark[], collections: string[]): 
       fallbackDatabase.run("DELETE FROM bookmarks");
       fallbackDatabase.run("DELETE FROM collections");
       collections.forEach((name, position) => fallbackDatabase!.run("INSERT INTO collections(name, position) VALUES (?, ?)", [name, position]));
-      bookmarks.forEach((item) => fallbackDatabase!.run(
+      normalizedBookmarks.forEach((item) => fallbackDatabase!.run(
         "INSERT INTO bookmarks(id,url,domain,title,note,collection,palette,mark,favorite,image,images,kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         [item.id, item.url, item.domain, item.title, item.note, item.collection, item.palette, item.mark, item.favorite ? 1 : 0, item.image ?? null, serializeImages(item.images), item.kind],
       ));

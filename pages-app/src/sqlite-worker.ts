@@ -2,6 +2,7 @@
 
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 import type { Bookmark } from "./Page";
+import { adDestinationUrl, adDomainFromDestination, adPersistUrl } from "./ad-url";
 
 function parseImages(value: unknown): string[] | undefined {
   if (!value || typeof value !== "string") return undefined;
@@ -11,6 +12,20 @@ function parseImages(value: unknown): string[] | undefined {
   } catch {
     return undefined;
   }
+}
+
+function repairAdBookmark(bookmark: Bookmark): Bookmark {
+  if (bookmark.kind !== "ad") return bookmark;
+  const destination = adDestinationUrl(bookmark.url);
+  return {
+    ...bookmark,
+    url: adPersistUrl(bookmark.id, destination),
+    domain: adDomainFromDestination(destination),
+  };
+}
+
+function prepareBookmarksForStorage(bookmarks: Bookmark[]): Bookmark[] {
+  return bookmarks.map(repairAdBookmark);
 }
 
 function serializeImages(images: string[] | undefined): string | null {
@@ -46,7 +61,7 @@ function loadData() {
         : row.collection === "Ads"
           ? "ad"
           : "bookmark",
-  }));
+  })).map((row) => repairAdBookmark(row as Bookmark));
   const collections = query<{ name: string }>("SELECT name FROM collections ORDER BY position").map((row) => row.name);
   return { bookmarks, collections };
 }
@@ -80,11 +95,12 @@ async function initialize() {
 
 function save(payload: { bookmarks: Bookmark[]; collections: string[] }) {
   if (!database) throw new Error("SQLite OPFS is not initialized.");
+  const bookmarks = prepareBookmarksForStorage(payload.bookmarks);
   database.transaction((db) => {
     db.exec("DELETE FROM bookmarks");
     db.exec("DELETE FROM collections");
     payload.collections.forEach((name, position) => db.exec({ sql: "INSERT INTO collections(name, position) VALUES (?, ?)", bind: [name, position] }));
-    payload.bookmarks.forEach((item) => db.exec({
+    bookmarks.forEach((item) => db.exec({
       sql: "INSERT INTO bookmarks(id,url,domain,title,note,collection,palette,mark,favorite,image,images,kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
       bind: [item.id, item.url, item.domain, item.title, item.note, item.collection, item.palette, item.mark, item.favorite ? 1 : 0, item.image ?? null, serializeImages(item.images), item.kind],
     }));

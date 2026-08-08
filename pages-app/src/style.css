@@ -34,6 +34,7 @@ h1 em:after { content:""; position:absolute; height:9px; left:3%; right:1%; bott
 .primary { border:1.5px solid var(--ink); background:var(--coral); color:var(--ink); min-height:62px; border-radius:17px 21px 16px 22px; font-weight:800; cursor:pointer; box-shadow:4px 5px 0 var(--ink); transition:.18s ease; }
 .primary:hover { transform:translate(-1px,-2px); background:#ff7a5c; box-shadow:6px 8px 0 var(--ink); }
 .primary:active { transform:translate(3px,4px); box-shadow:1px 1px 0 var(--ink); }
+.primary:disabled { opacity:.55; cursor:wait; transform:none; box-shadow:4px 5px 0 var(--ink); }
 .scribble { position:absolute; right:8vw; bottom:-50px; color:var(--coral); font-family:"Comic Sans MS",cursive; font-size:18px; line-height:1.55; transform:rotate(-3deg); }
 .library { padding:20px 3vw 110px; max-width:1600px; margin:auto; overflow:hidden; }
 .library-head { display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:24px; }
