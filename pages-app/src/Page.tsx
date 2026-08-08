@@ -644,8 +644,8 @@ export default function Home() {
       if (!sharedNatively) downloadLoadFile(opener.file);
       setNotice(
         sharedNatively
-          ? `Shared ${opener.fileName} (${opener.bytes.toLocaleString()} bytes). Opening it verifies and shows the Load.`
-          : `${opener.fileName} downloaded (${opener.bytes.toLocaleString()} bytes). Send this one file — double-click to open the Load.`,
+          ? `Shared ${opener.fileName} (${opener.packageBytes.toLocaleString()} bytes). One self-contained file — open offline in any browser.`
+          : `${opener.fileName} downloaded (${opener.packageBytes.toLocaleString()} bytes). One self-contained HTML package — double-click to open the Load, no internet needed.`,
       );
       closeShare();
     } catch (error) {
@@ -1078,7 +1078,7 @@ export default function Home() {
           <button className="close" onClick={closeShare} aria-label="Close">×</button>
           <span className="modal-icon share-icon">↗</span><p className="kicker">SHARE KNOWLEDGE</p><h2 id="share-title">Shoot the Load.</h2><p>{shareTarget.title}</p>
           {!shareLink ? <div className="share-options">
-            <button onClick={() => shareOpenFile(shareTarget)} disabled={sharing !== null}><strong>{sharing === "openfile" ? "PACKING…" : "One open file"}</strong><span>One `.muthur.open.html` with the Load inside. Downloads on desktop; share sheet on phone. Double-click the file to open the Load.</span></button>
+            <button onClick={() => shareOpenFile(shareTarget)} disabled={sharing !== null}><strong>{sharing === "openfile" ? "PACKING…" : "Self-contained package"}</strong><span>One offline `.muthur.package.html` with the Load, verifier, and viewer built in. Share or double-click to open.</span></button>
             <button onClick={() => shareLoadAndLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "bundle" ? "PACKING…" : "Load + link"}</strong><span>Share the `.muthur.load` file and an open link together. No hosting — the link opens the Load you send.</span></button>
             <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "muthur.load only"}</strong><span>Download the owned, offline `.muthur.load` file with no link.</span></button>
             <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link"}</strong><span>Embedded browser link for small Loads (under 128 KB).</span></button>

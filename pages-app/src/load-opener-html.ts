@@ -1,8 +1,7 @@
 import type { Bookmark } from "./Page";
 import { createLoad } from "./load-format";
+import { LOAD_OPENER_CSS, LOAD_OPENER_SCRIPT } from "./generated/load-opener-embedded";
 import { shareFilesNatively } from "./native-share";
-
-const KEEPSEEK_ORIGIN = "https://keepseek-app.vercel.app";
 
 function escapeHtml(value: string) {
   return value
@@ -22,10 +21,7 @@ function openerBaseName(title: string) {
   return title.toLowerCase().replace(/\.md$/i, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 72) || "keepseek";
 }
 
-export async function createLoadOpenerHtml(
-  bookmark: Bookmark,
-  origin = typeof window === "undefined" ? KEEPSEEK_ORIGIN : window.location.origin,
-) {
+export async function createLoadOpenerHtml(bookmark: Bookmark) {
   const created = await createLoad(bookmark);
   const bytes = new Uint8Array(await created.file.arrayBuffer());
   const payload = JSON.stringify({
@@ -38,21 +34,22 @@ export async function createLoadOpenerHtml(
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(bookmark.title)} · MUTHUR Open File</title>
-  <link rel="stylesheet" href="${origin}/load-opener.css">
+  <title>${escapeHtml(bookmark.title)} · MUTHUR Package</title>
+  <style>${LOAD_OPENER_CSS}</style>
 </head>
 <body>
-  <div id="app"><main><p class="kicker">MUTHUR Open File</p><p class="lede">Verifying embedded Load…</p></main></div>
+  <div id="app"><main><p class="kicker">MUTHUR Package</p><p class="lede">Verifying embedded Load…</p></main></div>
   <script type="application/json" id="muthur-load-payload">${payload}</script>
-  <script type="module" src="${origin}/load-opener.js"></script>
+  <script>${LOAD_OPENER_SCRIPT}</script>
 </body>
 </html>`;
-  const fileName = `${openerBaseName(bookmark.title)}.muthur.open.html`;
+  const fileName = `${openerBaseName(bookmark.title)}.muthur.package.html`;
   return {
     fileName,
     file: new File([html], fileName, { type: "text/html" }),
     bytes: bytes.length,
     loadFileName: created.fileName,
+    packageBytes: html.length,
   };
 }
 
@@ -60,6 +57,6 @@ export async function shareLoadOpenerNatively(opener: { file: File; fileName: st
   return shareFilesNatively(
     [opener.file],
     opener.fileName,
-    "Open this file in your browser to view the shared Keepseek Load.",
+    "Open this self-contained HTML package in your browser to view the shared Keepseek Load.",
   );
 }

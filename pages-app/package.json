@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build"
+    "dev": "node scripts/bundle-load-opener.mjs && vite",
+    "build": "node scripts/bundle-load-opener.mjs && tsc --noEmit && vite build"
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.53.0-build1",
