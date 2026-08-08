@@ -90,6 +90,99 @@
     };
   }
 
+  function adExternalLink(url) {
+    const trimmed = String(url || "").trim();
+    if (!trimmed || /^keepseek:/i.test(trimmed) || /^https?:\/\/keepseek(?::\/\/|\/+\/)ad\/\d+$/i.test(trimmed)) return null;
+    try {
+      const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : "https://" + trimmed;
+      const parsed = new URL(normalized);
+      if (!/^https?:$/i.test(parsed.protocol)) return null;
+      return normalized;
+    } catch {
+      return null;
+    }
+  }
+
+  function adDomain(bookmark) {
+    const link = adExternalLink(bookmark.url);
+    if (!link) return bookmark.domain || "Ad";
+    try {
+      return new URL(link).hostname.replace(/^www\./, "");
+    } catch {
+      return bookmark.domain || "Ad";
+    }
+  }
+
+  function bindOpenInKeepseek(button, itemPayload, keepseekOrigin) {
+    button.addEventListener("click", () => {
+      const receiver = window.open(keepseekOrigin + "view#receive-load&view=1", "_blank");
+      if (!receiver) {
+        window.alert("Allow pop-ups, then click Open in Keepseek again.");
+        return;
+      }
+      const message = { type: "keepseek-shared-load", payload: itemPayload };
+      const send = () => {
+        try {
+          receiver.postMessage(message, keepseekOrigin.replace(/\/$/, ""));
+        } catch {
+          receiver.postMessage(message, "*");
+        }
+      };
+      window.setTimeout(send, 300);
+      window.setTimeout(send, 1000);
+      window.setTimeout(send, 2500);
+    });
+  }
+
+  function renderAdCard(opened, itemPayload, keepseekOrigin) {
+    const images = bookmarkImages(opened.bookmark);
+    const adLink = adExternalLink(opened.bookmark.url);
+    const card =
+      '<article class="ad-card">' +
+      '<p class="kicker">Ad</p>' +
+      '<p class="ad-domain">' + escapeHtml(adDomain(opened.bookmark)) + "</p>" +
+      "<h2>" + escapeHtml(opened.bookmark.title) + "</h2>" +
+      (opened.bookmark.note ? '<p class="note">' + escapeHtml(opened.bookmark.note) + "</p>" : "") +
+      (images.length
+        ? '<div class="gallery">' + images.map((src) => '<img src="' + escapeHtml(src) + '" alt="">').join("") + "</div>"
+        : "") +
+      '<div class="proof compact"><div><small>Root hash</small><code>' + escapeHtml(opened.manifest.hashing.root.slice(0, 16)) + "…</code></div><span>SHA-256 ✓</span></div>" +
+      '<div class="actions card-actions">' +
+      (adLink ? '<a href="' + escapeHtml(adLink) + '" target="_blank" rel="noreferrer">Open link ↗</a>' : "") +
+      '<button type="button" class="open-keepseek">Open in Keepseek</button>' +
+      '<button type="button" class="secondary download-load">Download Load</button>' +
+      "</div></article>";
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = card;
+    const article = wrapper.firstElementChild;
+    bindOpenInKeepseek(article.querySelector(".open-keepseek"), itemPayload, keepseekOrigin);
+    article.querySelector(".download-load")?.addEventListener("click", () => {
+      const bytes = base64urlDecode(itemPayload.load);
+      const blob = new Blob([bytes], { type: "application/vnd.keepseek.muthurload+zip" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = opened.fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    });
+    return article;
+  }
+
+  function renderAdPack(title, openedItems, payload) {
+    const keepseekOrigin = (payload.keepseekOrigin || KEEPSEEK_URL).replace(/\/?$/, "/");
+    app.innerHTML =
+      '<main class="pack-wide">' +
+      '<p class="kicker">MUTHUR Ad Pack</p>' +
+      "<h1>" + escapeHtml(title) + "</h1>" +
+      '<p class="lede">' + openedItems.length + " verified ads · self-contained package.</p>" +
+      '<div class="ad-grid"></div></main>';
+    const grid = app.querySelector(".ad-grid");
+    openedItems.forEach((opened, index) => {
+      grid.appendChild(renderAdCard(opened, payload.loads[index], keepseekOrigin));
+    });
+  }
+
   function renderLoad(opened, payload) {
     const images = bookmarkImages(opened.bookmark);
     const keepseekOrigin = (payload.keepseekOrigin || KEEPSEEK_URL).replace(/\/?$/, "/");
@@ -106,24 +199,8 @@
       '<div class="actions"><button type="button" id="open-keepseek">Open in Keepseek</button>' +
       '<button type="button" class="secondary" id="download-load">Download .muthur.load</button></div></main>';
 
-    document.getElementById("open-keepseek")?.addEventListener("click", () => {
-      const receiver = window.open(keepseekOrigin + "view#receive-load&view=1", "_blank");
-      if (!receiver) {
-        window.alert("Allow pop-ups, then click Open in Keepseek again.");
-        return;
-      }
-      const message = { type: "keepseek-shared-load", payload: payload };
-      const send = () => {
-        try {
-          receiver.postMessage(message, keepseekOrigin.replace(/\/$/, ""));
-        } catch {
-          receiver.postMessage(message, "*");
-        }
-      };
-      window.setTimeout(send, 300);
-      window.setTimeout(send, 1000);
-      window.setTimeout(send, 2500);
-    });
+    const openButton = document.getElementById("open-keepseek");
+    if (openButton) bindOpenInKeepseek(openButton, payload, keepseekOrigin);
 
     document.getElementById("download-load")?.addEventListener("click", () => {
       const bytes = base64urlDecode(payload.load);
@@ -149,6 +226,20 @@
 
     try {
       const payload = JSON.parse(payloadElement.textContent);
+      if (Array.isArray(payload.loads) && payload.loads.length > 0) {
+        const openedItems = [];
+        for (const item of payload.loads) {
+          const bytes = base64urlDecode(item.load);
+          const opened = await openEmbeddedLoad(bytes, item.fileName || "shared.muthur.load");
+          if (item.root && opened.manifest.hashing.root !== item.root) {
+            throw new Error("Embedded Load root hash does not match this package.");
+          }
+          openedItems.push(opened);
+        }
+        renderAdPack(payload.title || "Ad collection", openedItems, payload);
+        return;
+      }
+
       const bytes = base64urlDecode(payload.load);
       const opened = await openEmbeddedLoad(bytes, payload.fileName || "shared.muthur.load");
       if (payload.root && opened.manifest.hashing.root !== payload.root) {

@@ -24,6 +24,52 @@ main {
   margin: 32px auto 48px;
 }
 
+main.pack-wide {
+  width: min(1080px, calc(100% - 32px));
+}
+
+h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  line-height: 1;
+}
+
+.ad-domain {
+  margin: 0 0 8px;
+  color: var(--olive);
+  font-size: 0.95rem;
+}
+
+.ad-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 28px;
+}
+
+.ad-card {
+  border: 1.5px solid var(--ink);
+  border-radius: 16px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 4px 5px 0 rgba(23, 23, 19, 0.12);
+}
+
+.proof.compact {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+}
+
+.card-actions {
+  margin-top: 16px;
+}
+
+.card-actions a,
+.card-actions button {
+  font-size: 0.92rem;
+  padding: 10px 12px;
+}
+
 .kicker {
   margin: 0 0 8px;
   color: var(--olive);

@@ -30,20 +30,10 @@ export async function createLoadOpenerHtml(bookmark: Bookmark) {
     root: created.manifest.hashing.root,
     keepseekOrigin: origin,
   });
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(bookmark.title)} · MUTHUR Package</title>
-  <style>${LOAD_OPENER_CSS}</style>
-</head>
-<body>
-  <div id="app"><main><p class="kicker">MUTHUR Package</p><p class="lede">Verifying embedded Load…</p></main></div>
-  <script type="application/json" id="muthur-load-payload">${payload}</script>
-  <script>${LOAD_OPENER_SCRIPT}</script>
-</body>
-</html>`;
+  const html = buildPackageHtml({
+    title: `${bookmark.title} · MUTHUR Package`,
+    payload,
+  });
   const fileName = `${openerBaseName(bookmark.title)}.muthur.package.html`;
   return {
     fileName,
@@ -52,6 +42,56 @@ export async function createLoadOpenerHtml(bookmark: Bookmark) {
     loadFileName: created.fileName,
     packageBytes: html.length,
   };
+}
+
+export async function createMultiAdPackageHtml(bookmarks: Bookmark[], title: string) {
+  if (bookmarks.length < 2) {
+    throw new Error("Pick at least two ads to package together.");
+  }
+  const loads = await Promise.all(bookmarks.map(async (bookmark) => {
+    const created = await createLoad(bookmark);
+    const bytes = new Uint8Array(await created.file.arrayBuffer());
+    return {
+      fileName: created.fileName,
+      load: base64url(bytes),
+      root: created.manifest.hashing.root,
+    };
+  }));
+  const payload = JSON.stringify({
+    version: 2,
+    title,
+    loads,
+    keepseekOrigin: origin,
+  });
+  const html = buildPackageHtml({
+    title: `${title} · MUTHUR Ad Pack`,
+    payload,
+    lede: `Verifying ${bookmarks.length} embedded Loads…`,
+  });
+  const fileName = `${openerBaseName(title)}.muthur.adpack.html`;
+  return {
+    fileName,
+    file: new File([html], fileName, { type: "text/html" }),
+    adCount: bookmarks.length,
+    packageBytes: html.length,
+  };
+}
+
+function buildPackageHtml(options: { title: string; payload: string; lede?: string }) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(options.title)}</title>
+  <style>${LOAD_OPENER_CSS}</style>
+</head>
+<body>
+  <div id="app"><main><p class="kicker">MUTHUR Package</p><p class="lede">${escapeHtml(options.lede ?? "Verifying embedded Load…")}</p></main></div>
+  <script type="application/json" id="muthur-load-payload">${options.payload}</script>
+  <script>${LOAD_OPENER_SCRIPT}</script>
+</body>
+</html>`;
 }
 
 export async function shareLoadOpenerNatively(opener: { file: File; fileName: string }) {

@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "re
 import { openKeepsakeDatabase, saveKeepsakeData, flushKeepsakeData, backupKeepsakeData, loadKeepsakeBackup, type StorageMode } from "./storage";
 import { adDestinationUrl, adDomainFromDestination, adPersistUrl, isAdStorageUrl } from "./ad-url";
 import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, parseKeepseekLoadLocation, shareLoadBundleNatively, type OpenedLoad } from "./load-format";
-import { createLoadOpenerHtml, shareLoadOpenerNatively } from "./load-opener-html";
+import { createLoadOpenerHtml, createMultiAdPackageHtml, shareLoadOpenerNatively } from "./load-opener-html";
 import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
 import { IoShareSocialOutline } from "react-icons/io5";
@@ -177,7 +177,7 @@ export default function Home() {
   const [loadPreview, setLoadPreview] = useState<OpenedLoad | null>(null);
   const [creatingLoad, setCreatingLoad] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
-  const [sharing, setSharing] = useState<"load" | "link" | "bundle" | "openfile" | null>(null);
+  const [sharing, setSharing] = useState<"load" | "link" | "bundle" | "openfile" | "adpack" | null>(null);
   const [shareLink, setShareLink] = useState("");
   const [shareLinkKind, setShareLinkKind] = useState<"embedded" | "companion" | "muthur">("embedded");
   const [pendingCompanionLoad, setPendingCompanionLoad] = useState<{ fileName: string; rootHash: string } | null>(null);
@@ -362,6 +362,11 @@ export default function Home() {
   const playerPlayback = useMemo(
     () => (playerTarget ? playbackFor(playerTarget.url) : null),
     [playerTarget],
+  );
+
+  const visibleAds = useMemo(
+    () => visible.filter((bookmark) => bookmark.kind === "ad"),
+    [visible],
   );
 
   function startCapture(event: FormEvent) {
@@ -624,6 +629,40 @@ export default function Home() {
     window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
   }
 
+  async function packageVisibleAds() {
+    const ads = visibleAds.map(repairAdBookmark);
+    if (ads.length < 2) {
+      setNotice("Need at least two ads visible to build a pack.");
+      return;
+    }
+    setSharing("adpack");
+    const packTitle = active === "Ads"
+      ? "Ads collection"
+      : query.trim()
+        ? `Ads matching “${query.trim()}”`
+        : "Ad pack";
+    setNotice(`Building ad pack (${ads.length} ads)…`);
+    try {
+      const pack = await createMultiAdPackageHtml(ads, packTitle);
+      let sharedNatively = false;
+      try {
+        sharedNatively = await shareLoadOpenerNatively(pack);
+      } catch {
+        sharedNatively = false;
+      }
+      if (!sharedNatively) downloadLoadFile(pack.file);
+      setNotice(
+        sharedNatively
+          ? `Shared ${pack.fileName} (${pack.packageBytes.toLocaleString()} bytes) with ${pack.adCount} verified ads.`
+          : `${pack.fileName} downloaded (${pack.packageBytes.toLocaleString()} bytes). One self-contained HTML page with ${pack.adCount} ads.`,
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Keepseek could not create that ad pack.");
+    } finally {
+      setSharing(null);
+    }
+  }
+
   async function shareOpenFile(bookmark: Bookmark) {
     setSharing("openfile");
     setCreatingLoad(bookmark.id);
@@ -876,6 +915,11 @@ export default function Home() {
           <div className="data-actions">
             <span className="local-pill"><i /> {storageReady ? storageMode === "opfs" ? "SQLite · OPFS file" : "SQLite · IndexedDB fallback" : "Starting SQLite…"}</span>
             <button className="open-load" onClick={() => loadRef.current?.click()}>⌁ Open Load</button>
+            {visibleAds.length >= 2 && (
+              <button onClick={() => void packageVisibleAds()} disabled={sharing !== null}>
+                {sharing === "adpack" ? "Packing…" : `Package ${visibleAds.length} ads`}
+              </button>
+            )}
             <button onClick={() => importRef.current?.click()}>⇧ Import JSON</button>
             <button onClick={exportBookmarks}>⇩ Export JSON</button>
             <input ref={importRef} onChange={importBookmarks} type="file" accept="application/json,.json" hidden />
