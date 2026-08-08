@@ -79,7 +79,7 @@ function defaultNoteFor(kind: AddKind): string {
     case "playlist":
       return "Saved playlist.";
     case "ad":
-      return "Saved ad.";
+      return "";
     case "bookmark":
       return "Saved for later.";
     default: {
@@ -87,6 +87,24 @@ function defaultNoteFor(kind: AddKind): string {
       return _exhaustive;
     }
   }
+}
+
+function brandMark(brand: string): string {
+  const trimmed = brand.trim();
+  if (!trimmed) return "Ad";
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
+  return trimmed.slice(0, 2).toUpperCase();
+}
+
+function normalizeDestinationUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  return trimmed.match(/^https?:\/\//) ? trimmed : `https://${trimmed}`;
+}
+
+function scrapHasLink(bookmark: Bookmark): boolean {
+  return /^https?:\/\//i.test(bookmark.url.trim());
 }
 
 function metadataFor(rawUrl: string) {
@@ -114,9 +132,12 @@ export default function Home() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [addKind, setAddKind] = useState<AddKind>("bookmark");
-  const [step, setStep] = useState<"url" | "player" | "details">("url");
+  const [step, setStep] = useState<"url" | "player" | "details" | "compose">("url");
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
+  const [adBrand, setAdBrand] = useState("");
+  const [adHeadline, setAdHeadline] = useState("");
+  const [adImage, setAdImage] = useState("");
   const [collection, setCollection] = useState("Inspiration");
   const [captured, setCaptured] = useState<ReturnType<typeof metadataFor> | null>(null);
   const [capturedPlayback, setCapturedPlayback] = useState<PlaylistPlayback | null>(null);
@@ -246,6 +267,57 @@ export default function Home() {
     }
   }
 
+  function saveAdCompose(event: FormEvent) {
+    event.preventDefault();
+    const brand = adBrand.trim();
+    const headline = adHeadline.trim();
+    const copy = note.trim();
+    setCaptureError("");
+    if (!brand) {
+      setCaptureError("Enter a brand or campaign name.");
+      return;
+    }
+    if (!headline) {
+      setCaptureError("Enter a headline for this ad.");
+      return;
+    }
+    if (!copy) {
+      setCaptureError("Write the ad copy.");
+      return;
+    }
+    let destination = "";
+    if (url.trim()) {
+      try {
+        destination = normalizeDestinationUrl(url);
+        new URL(destination);
+      } catch {
+        setCaptureError("Enter a valid destination URL, or leave it blank.");
+        return;
+      }
+    }
+    const palettes = ["sunset", "grid", "violet", "coral", "garden"];
+    const finalCollection = collection || defaultCollectionFor("ad");
+    if (!userCollections.includes(finalCollection)) {
+      setUserCollections((items) => [...items, finalCollection]);
+    }
+    const saved: Bookmark = {
+      id: Date.now(),
+      url: destination,
+      domain: brand,
+      title: headline,
+      note: copy,
+      collection: finalCollection,
+      palette: palettes[bookmarks.length % palettes.length],
+      mark: brandMark(brand),
+      kind: "ad",
+      image: adImage || undefined,
+    };
+    setBookmarks((items) => [saved, ...items]);
+    setActive(finalCollection);
+    setNotice(`Created ${headline}.`);
+    closeModal();
+  }
+
   function saveBookmark(event: FormEvent) {
     event.preventDefault();
     if (!captured) return;
@@ -282,9 +354,12 @@ export default function Home() {
   function openAdd(kind: AddKind) {
     setAddKind(kind);
     setCollection(defaultCollectionFor(kind));
-    setStep("url");
+    setStep(kind === "ad" ? "compose" : "url");
     setUrl("");
     setNote("");
+    setAdBrand("");
+    setAdHeadline("");
+    setAdImage("");
     setCaptured(null);
     setCapturedPlayback(null);
     setCaptureError("");
@@ -297,6 +372,9 @@ export default function Home() {
     setStep("url");
     setUrl("");
     setNote("");
+    setAdBrand("");
+    setAdHeadline("");
+    setAdImage("");
     setCaptured(null);
     setCapturedPlayback(null);
     setCaptureError("");
@@ -313,15 +391,53 @@ export default function Home() {
     setEditTitle(bookmark.title);
     setEditNote(bookmark.note);
     setEditCollection(bookmark.collection);
+    if (bookmark.kind === "ad") {
+      setAdBrand(bookmark.domain);
+      setAdHeadline(bookmark.title);
+      setAdImage(bookmark.image ?? "");
+    }
   }
 
   function saveEdit(event: FormEvent) {
     event.preventDefault();
     if (!editTarget) return;
+    const title = editTitle.trim();
+    if (!title) return;
+
+    if (editTarget.kind === "ad") {
+      const brand = adBrand.trim();
+      const copy = editNote.trim();
+      if (!brand || !copy) {
+        setNotice("Brand and ad copy are required.");
+        return;
+      }
+      let destination = "";
+      if (editUrl.trim()) {
+        try {
+          destination = normalizeDestinationUrl(editUrl);
+          new URL(destination);
+        } catch {
+          setNotice("Enter a valid destination URL, or leave it blank.");
+          return;
+        }
+      }
+      setBookmarks((items) => items.map((item) => item.id === editTarget.id ? {
+        ...item,
+        url: destination,
+        domain: brand,
+        mark: brandMark(brand),
+        title,
+        note: copy,
+        collection: editCollection,
+        image: adImage || undefined,
+      } : item));
+      setEditTarget(null);
+      setNotice(`Updated ${title}.`);
+      return;
+    }
+
     try {
       const metadata = metadataFor(editUrl);
-      const title = editTitle.trim();
-      if (!title) return;
       setBookmarks((items) => items.map((item) => item.id === editTarget.id ? {
         ...item,
         url: metadata.normalized,
@@ -487,6 +603,15 @@ export default function Home() {
     }
   }
 
+  function pickAdImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setAdImage(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  }
+
   function createCollection(event: FormEvent) {
     event.preventDefault();
     const name = newCollection.trim();
@@ -535,7 +660,7 @@ export default function Home() {
                 </button>
                 <button type="button" role="menuitem" onClick={() => openAdd("ad")}>
                   <strong>Ad</strong>
-                  <span>Save a campaign, creative, or landing page.</span>
+                  <span>Create a campaign, headline, and creative.</span>
                 </button>
               </div>
             )}
@@ -565,19 +690,24 @@ export default function Home() {
         <div className="card-grid">
           {visible.map((bookmark, index) => {
             const playable = bookmark.kind === "playlist" && (canPlayMedia(bookmark.url) || bookmark.collection === "Playlists");
+            const linked = scrapHasLink(bookmark);
+            const artStyle = bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined;
+            const artMark = bookmark.kind === "ad" ? bookmark.mark : /keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark;
             return (
-            <article className={`bookmark-card tilt-${index % 4}${playable ? " playable" : ""}`} key={bookmark.id}>
+            <article className={`bookmark-card tilt-${index % 4}${playable ? " playable" : ""}${bookmark.kind === "ad" ? " ad-card" : ""}`} key={bookmark.id}>
               {playable ? (
-                <button type="button" className={`art ${bookmark.palette} play-art`} style={bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined} onClick={() => openPlayer(bookmark)} aria-label={`Play ${bookmark.title}`}>
+                <button type="button" className={`art ${bookmark.palette} play-art`} style={artStyle} onClick={() => openPlayer(bookmark)} aria-label={`Play ${bookmark.title}`}>
                   <span className="play-badge">▶</span>
-                  <span className={bookmark.image ? "visually-hidden" : ""}>{/keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark}</span>
+                  <span className={bookmark.image ? "visually-hidden" : ""}>{artMark}</span>
                 </button>
+              ) : linked ? (
+                <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={artStyle} aria-label={`Open ${bookmark.title}`}><span className={bookmark.image ? "visually-hidden" : ""}>{artMark}</span></a>
               ) : (
-                <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined} aria-label={`Open ${bookmark.title}`}><span className={bookmark.image ? "visually-hidden" : ""}>{/keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark}</span></a>
+                <div className={`art ${bookmark.palette} art-static`} style={artStyle} aria-hidden={bookmark.image ? undefined : true}><span className={bookmark.image ? "visually-hidden" : ""}>{artMark}</span></div>
               )}
               <div className="card-body">
-                <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
-                <h3>{playable ? <button type="button" className="title-play" onClick={() => openPlayer(bookmark)}>{bookmark.title}</button> : <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a>}</h3>
+                <div className="domain"><span>{bookmark.kind === "ad" ? bookmark.domain : bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
+                <h3>{playable ? <button type="button" className="title-play" onClick={() => openPlayer(bookmark)}>{bookmark.title}</button> : linked ? <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a> : <span>{bookmark.title}</span>}</h3>
                 <p className="note">“{bookmark.note}”</p>
                 <div className="card-footer"><span className="tag">{bookmark.collection}</span><span className="tag tag-kind">{bookmark.kind}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}<button type="button" className={`icon-btn edit-icon-btn edit-${bookmark.palette}`} onClick={() => startEdit(bookmark)} aria-label={`Edit ${bookmark.title}`}><VscEditCompact aria-hidden="true" /></button><button type="button" className={`icon-btn delete-icon-btn delete-${bookmark.palette}`} onClick={() => setDeleteTarget(bookmark)} aria-label={`Delete ${bookmark.title}`}><AiTwotoneDelete aria-hidden="true" /></button><button type="button" className={`icon-btn share-icon-btn share-${bookmark.palette}`} onClick={() => setShareTarget(bookmark)} aria-label={`Share ${bookmark.title}`}><IoShareSocialOutline aria-hidden="true" /></button></div></div>
               </div>
@@ -596,31 +726,44 @@ export default function Home() {
       {open && <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && closeModal()}>
         <div className={`modal${step === "player" ? " player-modal" : ""}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <button className="close" onClick={closeModal} aria-label="Close">×</button>
-          {step === "url" ? <form onSubmit={startCapture} noValidate>
-            <span className="modal-icon">{addKind === "playlist" ? "♫" : addKind === "ad" ? "◎" : "↗"}</span>
-            <p className="kicker">{addKind === "playlist" ? "NEW PLAYLIST" : addKind === "ad" ? "NEW AD" : "NEW SCRAP"}</p>
-            <h2 id="modal-title">{addKind === "playlist" ? "What are you keeping?" : addKind === "ad" ? "Which ad are you keeping?" : "What caught your eye?"}</h2>
-            <p>{addKind === "playlist" ? "Paste a playlist link, video URL, or embed code. We’ll gather its title and source." : addKind === "ad" ? "Paste the ad link or landing page. We’ll gather its title and source." : "Paste the address. We’ll gather its picture and details."}</p>
-            <label>{addKind === "playlist" ? "Playlist, video, or embed" : addKind === "ad" ? "Ad URL" : "Website URL"}
+          {step === "compose" ? <form onSubmit={saveAdCompose} noValidate>
+            <span className="modal-icon">◎</span>
+            <p className="kicker">CREATE AD</p>
+            <h2 id="modal-title">Build your ad.</h2>
+            <p>Write the campaign yourself — brand, headline, copy, and an optional image or link.</p>
+            <label>Brand or campaign<input autoFocus required value={adBrand} onChange={(e) => { setAdBrand(e.target.value); setCaptureError(""); }} placeholder="e.g. Northwind Coffee" maxLength={80} /></label>
+            <label>Headline<input required value={adHeadline} onChange={(e) => { setAdHeadline(e.target.value); setCaptureError(""); }} placeholder="e.g. Wake up slow." maxLength={160} /></label>
+            <label>Ad copy<textarea required value={note} onChange={(e) => { setNote(e.target.value); setCaptureError(""); }} placeholder="The message you want people to remember." rows={4} /></label>
+            <label>Destination URL (optional)<input type="text" value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder="https://brand.com/offer" /></label>
+            <label>Creative image (optional)<input type="file" accept="image/*" onChange={pickAdImage} />{adImage && <div className="ad-image-preview" style={{ backgroundImage: `url(${adImage})` }} role="img" aria-label="Ad creative preview" />}</label>
+            <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
+            {captureError && <p className="form-error" role="alert">{captureError}</p>}
+            <button className="primary wide" type="submit">Create ad <span>→</span></button>
+          </form> : step === "url" ? <form onSubmit={startCapture} noValidate>
+            <span className="modal-icon">{addKind === "playlist" ? "♫" : "↗"}</span>
+            <p className="kicker">{addKind === "playlist" ? "NEW PLAYLIST" : "NEW SCRAP"}</p>
+            <h2 id="modal-title">{addKind === "playlist" ? "What are you keeping?" : "What caught your eye?"}</h2>
+            <p>{addKind === "playlist" ? "Paste a playlist link, video URL, or embed code. We’ll gather its title and source." : "Paste the address. We’ll gather its picture and details."}</p>
+            <label>{addKind === "playlist" ? "Playlist, video, or embed" : "Website URL"}
               {addKind === "playlist"
                 ? <textarea autoFocus required value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder={"https://open.spotify.com/playlist/...\nhttps://youtube.com/watch?v=...\n<iframe src=\"https://www.youtube.com/embed/...\"></iframe>"} rows={4} />
-                : <input autoFocus type="text" required value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder={addKind === "ad" ? "https://brand.com/campaign" : "https://something.wonderful"} />}
+                : <input autoFocus type="text" required value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder="https://something.wonderful" />}
             </label>
             {captureError && <p className="form-error" role="alert">{captureError}</p>}
-            <button className="primary wide" type="submit">{addKind === "playlist" ? "Open player" : addKind === "ad" ? "Gather this ad" : "Gather this page"} <span>→</span></button>
+            <button className="primary wide" type="submit">{addKind === "playlist" ? "Open player" : "Gather this page"} <span>→</span></button>
           </form> : step === "player" && captured && capturedPlayback ? <form onSubmit={saveBookmark}>
             <p className="kicker">NOW PLAYING</p><h2 id="modal-title">Preview your playlist.</h2>
             <PlaylistPlayerFrame playback={capturedPlayback} title={captured.title} sourceUrl={captured.normalized} />
             <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why are you keeping this playlist?" /></label>
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
             <button className="primary wide" type="submit">Save playlist <span>→</span></button>
-          </form> : <form onSubmit={saveBookmark}>
-            <p className="kicker">{addKind === "playlist" ? "PLAYLIST FOUND" : addKind === "ad" ? "AD FOUND" : "PAGE FOUND"}</p><h2 id="modal-title">Make it yours.</h2>
+          </form> : step === "details" ? <form onSubmit={saveBookmark}>
+            <p className="kicker">{addKind === "playlist" ? "PLAYLIST FOUND" : "PAGE FOUND"}</p><h2 id="modal-title">Make it yours.</h2>
             <div className="captured-preview"><div className="mini-art">{captured?.mark}</div><div><small>{captured?.domain}</small><strong>{captured?.title}</strong></div><span>✓</span></div>
-            <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder={addKind === "playlist" ? "Why are you keeping this playlist?" : addKind === "ad" ? "Why are you keeping this ad?" : "Why are you keeping this?"} /></label>
+            <label>Your note<textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder={addKind === "playlist" ? "Why are you keeping this playlist?" : "Why are you keeping this?"} /></label>
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
-            <button className="primary wide" type="submit">{addKind === "playlist" ? "Save playlist" : addKind === "ad" ? "Save ad" : "Tuck it away"} <span>→</span></button>
-          </form>}
+            <button className="primary wide" type="submit">{addKind === "playlist" ? "Save playlist" : "Tuck it away"} <span>→</span></button>
+          </form> : null}
         </div>
       </div>}
 
@@ -677,10 +820,18 @@ export default function Home() {
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="edit-title">
           <button className="close" onClick={() => setEditTarget(null)} aria-label="Close">×</button>
           <form onSubmit={saveEdit}>
-            <span className="modal-icon">✎</span><p className="kicker">EDIT SCRAP</p><h2 id="edit-title">Tune what you kept.</h2>
-            <label>Website URL<input autoFocus type="text" required value={editUrl} onChange={(e) => setEditUrl(e.target.value)} /></label>
-            <label>Title<input type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
-            <label>Your note<textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} /></label>
+            <span className="modal-icon">✎</span><p className="kicker">{editTarget.kind === "ad" ? "EDIT AD" : "EDIT SCRAP"}</p><h2 id="edit-title">{editTarget.kind === "ad" ? "Revise your ad." : "Tune what you kept."}</h2>
+            {editTarget.kind === "ad" ? <>
+              <label>Brand or campaign<input autoFocus type="text" required value={adBrand} onChange={(e) => setAdBrand(e.target.value)} maxLength={80} /></label>
+              <label>Headline<input type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
+              <label>Ad copy<textarea required value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={4} /></label>
+              <label>Destination URL (optional)<input type="text" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="https://brand.com/offer" /></label>
+              <label>Creative image (optional)<input type="file" accept="image/*" onChange={pickAdImage} />{adImage && <div className="ad-image-preview" style={{ backgroundImage: `url(${adImage})` }} role="img" aria-label="Ad creative preview" />}</label>
+            </> : <>
+              <label>Website URL<input autoFocus type="text" required value={editUrl} onChange={(e) => setEditUrl(e.target.value)} /></label>
+              <label>Title<input type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
+              <label>Your note<textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} /></label>
+            </>}
             <label>Collection<select value={editCollection} onChange={(e) => setEditCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}</select></label>
             <button className="primary wide" type="submit">Save changes <span>→</span></button>
           </form>
