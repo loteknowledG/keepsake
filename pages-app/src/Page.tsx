@@ -181,6 +181,7 @@ export default function Home() {
   const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
   const [sharing, setSharing] = useState<"load" | "link" | null>(null);
   const [shareLink, setShareLink] = useState("");
+  const [shareLinkSlim, setShareLinkSlim] = useState(false);
   const [editTarget, setEditTarget] = useState<Bookmark | null>(null);
   const [editUrl, setEditUrl] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -580,16 +581,29 @@ export default function Home() {
     }
   }
 
-  function closeShare() { setShareTarget(null); setShareLink(""); }
+  function closeShare() {
+    setShareTarget(null);
+    setShareLink("");
+    setShareLinkSlim(false);
+  }
 
-  async function prepareMuthurLink(bookmark: Bookmark) {
-    setSharing("link"); setNotice("Building an embedded MUTHUR Link…");
+  async function prepareMuthurLink(bookmark: Bookmark, forceSlim = false) {
+    setSharing("link");
+    setNotice(forceSlim ? "Building a text-only MUTHUR Link…" : "Building a MUTHUR Link…");
     try {
-      const created = await createMuthurLink(bookmark);
+      const created = await createMuthurLink(bookmark, undefined, { slim: forceSlim });
       setShareLink(created.url);
-      setNotice(`MUTHUR Link ready. Anyone with it can read this ${created.bytes.toLocaleString()}-byte Load.`);
-    } catch (error) { setNotice(error instanceof Error ? error.message : "Keepseek could not create that MUTHUR Link."); }
-    finally { setSharing(null); }
+      setShareLinkSlim(created.slim);
+      setNotice(
+        created.slim
+          ? `MUTHUR Link ready (${created.bytes.toLocaleString()} bytes, text and metadata only — images omitted).`
+          : `MUTHUR Link ready. Anyone with it can read this ${created.bytes.toLocaleString()}-byte Load.`,
+      );
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Keepseek could not create that MUTHUR Link.");
+    } finally {
+      setSharing(null);
+    }
   }
 
   async function copyPreparedLink() {
@@ -959,9 +973,10 @@ export default function Home() {
           <button className="close" onClick={closeShare} aria-label="Close">×</button>
           <span className="modal-icon share-icon">↗</span><p className="kicker">SHARE KNOWLEDGE</p><h2 id="share-title">Shoot the Load.</h2><p>{shareTarget.title}</p>
           {!shareLink ? <div className="share-options">
-            <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "muthur.load"}</strong><span>Download the owned, offline `.muthur.load` file.</span></button>
-            <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link"}</strong><span>Create a zero-install browser link. Anyone with it can read this Load.</span></button>
-          </div> : <div className="share-ready"><strong>muthur.link ready</strong><p>This public-by-possession link contains the complete verified Load.</p><a href={shareLink}>Open muthur.link <span>↗</span></a><button onClick={copyPreparedLink}>Copy Link</button></div>}
+            <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "muthur.load"}</strong><span>Best for large scraps. Download the full verified file and send it anywhere.</span></button>
+            <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link"}</strong><span>Zero-install browser link for small Loads (up to 128 KB). Omits images automatically if needed.</span></button>
+            <button onClick={() => prepareMuthurLink(shareTarget, true)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link · text only"}</strong><span>Share headline, copy, and metadata without creative images.</span></button>
+          </div> : <div className="share-ready"><strong>muthur.link ready</strong><p>{shareLinkSlim ? "This link carries text and metadata only. Creative images were left out to stay under the 128 KB browser link limit." : "This public-by-possession link contains the complete verified Load."}</p><a href={shareLink}>Open muthur.link <span>↗</span></a><button onClick={copyPreparedLink}>Copy Link</button></div>}
         </div>
       </div>}
 
