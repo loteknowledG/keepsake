@@ -809,7 +809,7 @@ export default function Home() {
               <div className="card-body">
                 <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
                 <h3>{playable ? <button type="button" className="title-play" onClick={() => openPlayer(bookmark)}>{bookmark.title}</button> : isAd ? <button type="button" className="title-play" onClick={() => openAd(bookmark)}>{bookmark.title}</button> : linked ? <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a> : <span>{bookmark.title}</span>}</h3>
-                <p className="note">“{bookmark.note}”</p>
+                <p className={isAd ? "note ad-copy" : "note"}>{isAd ? bookmark.note : `\u201c${bookmark.note}\u201d`}</p>
                 <div className="card-footer"><span className="tag">{bookmark.collection}</span><span className="tag tag-kind">{bookmark.kind}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}{isAd && <button type="button" className="load-action view-action" onClick={() => openAd(bookmark)}>◎ View</button>}<button type="button" className={`icon-btn edit-icon-btn edit-${bookmark.palette}`} onClick={() => startEdit(bookmark)} aria-label={`Edit ${bookmark.title}`}><VscEditCompact aria-hidden="true" /></button><button type="button" className={`icon-btn delete-icon-btn delete-${bookmark.palette}`} onClick={() => setDeleteTarget(bookmark)} aria-label={`Delete ${bookmark.title}`}><AiTwotoneDelete aria-hidden="true" /></button><button type="button" className={`icon-btn share-icon-btn share-${bookmark.palette}`} onClick={() => setShareTarget(bookmark)} aria-label={`Share ${bookmark.title}`}><IoShareSocialOutline aria-hidden="true" /></button></div></div>
               </div>
             </article>
@@ -893,7 +893,7 @@ export default function Home() {
               <p className="kicker">AD</p>
               <p className="ad-view-domain">{adTarget.domain}</p>
               <h2 id="ad-title">{adTarget.title}</h2>
-              <p className="ad-view-copy">“{adTarget.note}”</p>
+              <div className="ad-view-copy">{adTarget.note}</div>
               {images.length > 0 ? (
                 <div className="ad-view-gallery">
                   {images.map((src, imageIndex) => (
