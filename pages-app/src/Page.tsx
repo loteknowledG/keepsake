@@ -178,12 +178,14 @@ export default function Home() {
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [newCollection, setNewCollection] = useState("");
   const [loadPreview, setLoadPreview] = useState<OpenedLoad | null>(null);
+  const [loadViewOnly, setLoadViewOnly] = useState(false);
+  const [adViewOnly, setAdViewOnly] = useState(false);
   const [creatingLoad, setCreatingLoad] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
   const [sharing, setSharing] = useState<"load" | "link" | "bundle" | "openfile" | null>(null);
   const [shareLink, setShareLink] = useState("");
   const [shareLinkKind, setShareLinkKind] = useState<"embedded" | "companion" | "muthur">("embedded");
-  const [pendingCompanionLoad, setPendingCompanionLoad] = useState<{ fileName: string; rootHash: string } | null>(null);
+  const [pendingCompanionLoad, setPendingCompanionLoad] = useState<{ fileName: string; rootHash: string; viewMode: boolean } | null>(null);
   const [editTarget, setEditTarget] = useState<Bookmark | null>(null);
   const [editUrl, setEditUrl] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -297,7 +299,7 @@ export default function Home() {
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 
     if (target.kind === "companion") {
-      setPendingCompanionLoad({ fileName: target.fileName, rootHash: target.rootHash });
+      setPendingCompanionLoad({ fileName: target.fileName, rootHash: target.rootHash, viewMode: target.viewMode });
       setNotice(`Choose ${target.fileName} to open this shared Load.`);
       window.setTimeout(() => loadRef.current?.click(), 0);
       return;
@@ -309,8 +311,7 @@ export default function Home() {
         const preview = target.kind === "embedded"
           ? await openLoadFromBytes(target.bytes, target.fileName)
           : await fetchLoadFromUrl(target.url, target.fileName);
-        setLoadPreview(preview);
-        setNotice("Shared Load verified. Preview before taking it.");
+        presentOpenedLoad(preview, "viewMode" in target ? target.viewMode : false);
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "That shared Load could not be opened.");
       }
@@ -483,9 +484,45 @@ export default function Home() {
     setPlayerTarget(bookmark);
   }
 
-  function openAd(bookmark: Bookmark) {
+  function openAd(bookmark: Bookmark, viewOnly = false) {
     if (bookmark.kind !== "ad") return;
+    setAdViewOnly(viewOnly);
     setAdTarget(bookmark);
+  }
+
+  function presentOpenedLoad(opened: OpenedLoad, viewMode: boolean) {
+    const bookmark: Bookmark = {
+      ...opened.bookmark,
+      kind: normalizeScrapKind(opened.bookmark.kind, opened.bookmark.collection),
+    };
+    if (viewMode) {
+      switch (bookmark.kind) {
+        case "ad":
+          openAd(bookmark, true);
+          setNotice("Shared ad opened in view mode.");
+          return;
+        case "playlist":
+          if (canPlayMedia(bookmark.url)) {
+            setPlayerTarget(bookmark);
+            setNotice("Shared playlist opened in view mode.");
+            return;
+          }
+          break;
+        case "bookmark":
+          break;
+        default: {
+          const _exhaustive: never = bookmark.kind;
+          return _exhaustive;
+        }
+      }
+      setLoadViewOnly(true);
+      setLoadPreview(opened);
+      setNotice("Shared Load opened in view mode.");
+      return;
+    }
+    setLoadViewOnly(false);
+    setLoadPreview(opened);
+    setNotice("Shared Load verified. Preview before taking it.");
   }
 
   function openAdd(kind: AddKind) {
@@ -730,11 +767,11 @@ export default function Home() {
       if (expected && preview.manifest.hashing.root !== expected.rootHash) {
         throw new Error("This file does not match the shared Load link.");
       }
-      setLoadPreview(preview);
       setPendingCompanionLoad(null);
-      setNotice("Load verified. Preview before taking it.");
+      presentOpenedLoad(preview, expected?.viewMode ?? false);
     } catch (error) {
       setLoadPreview(null);
+      setLoadViewOnly(false);
       setNotice(error instanceof Error ? error.message : "That file is not a valid Load.");
     } finally {
       event.target.value = "";
@@ -1005,11 +1042,11 @@ export default function Home() {
         const images = bookmarkImages(adTarget);
         const linked = scrapHasLink(adTarget);
         return (
-          <div className="modal-backdrop ad-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setAdTarget(null)}>
+          <div className="modal-backdrop ad-backdrop" onMouseDown={(e) => e.target === e.currentTarget && (setAdTarget(null), setAdViewOnly(false))}>
             <div className="modal ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-title">
-              <button className="close" onClick={() => setAdTarget(null)} aria-label="Close">×</button>
+              <button className="close" onClick={() => { setAdTarget(null); setAdViewOnly(false); }} aria-label="Close">×</button>
               <span className="modal-icon ad-view-icon">◎</span>
-              <p className="kicker">AD</p>
+              <p className="kicker">{adViewOnly ? "SHARED AD" : "AD"}</p>
               <p className="ad-view-domain">{adTarget.domain}</p>
               <h2 id="ad-title">{adTarget.title}</h2>
               <div className="ad-view-copy">{adTarget.note}</div>
@@ -1032,8 +1069,8 @@ export default function Home() {
               )}
               <div className="player-actions">
                 {linked && <a href={adTarget.url} target="_blank" rel="noreferrer">Open link <span>↗</span></a>}
-                <button type="button" onClick={() => { setAdTarget(null); startEdit(adTarget); }}>Edit ad</button>
-                <button type="button" onClick={() => setAdTarget(null)}>Close</button>
+                {!adViewOnly && <button type="button" onClick={() => { setAdTarget(null); setAdViewOnly(false); startEdit(adTarget); }}>Edit ad</button>}
+                <button type="button" onClick={() => { setAdTarget(null); setAdViewOnly(false); }}>Close</button>
               </div>
             </div>
           </div>
@@ -1061,15 +1098,17 @@ export default function Home() {
         </div>
       </div>}
 
-      {loadPreview && <div className="modal-backdrop load-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setLoadPreview(null)}>
+      {loadPreview && <div className="modal-backdrop load-backdrop" onMouseDown={(e) => e.target === e.currentTarget && (setLoadPreview(null), setLoadViewOnly(false))}>
         <div className="modal load-modal" role="dialog" aria-modal="true" aria-labelledby="load-title">
-          <button className="close" onClick={() => setLoadPreview(null)} aria-label="Close">×</button>
-          <span className="modal-icon load-icon">◉</span><p className="kicker">VERIFIED MUTHURLOAD</p><h2 id="load-title">{loadPreview.bookmark.title}</h2>
-          <p>Open without importing, inspect its lineage, then decide whether to Take Load.</p>
+          <button className="close" onClick={() => { setLoadPreview(null); setLoadViewOnly(false); }} aria-label="Close">×</button>
+          <span className="modal-icon load-icon">◉</span><p className="kicker">{loadViewOnly ? "SHARED LOAD" : "VERIFIED MUTHURLOAD"}</p><h2 id="load-title">{loadPreview.bookmark.title}</h2>
+          <p>{loadViewOnly ? "Read-only view of this shared Load." : "Open without importing, inspect its lineage, then decide whether to Take Load."}</p>
           <div className="load-proof"><div><small>ROOT HASH</small><code>{loadPreview.manifest.hashing.root.slice(0, 20)}…</code></div><span>SHA-256 ✓</span></div>
           <dl className="load-meta"><div><dt>Source</dt><dd>{loadPreview.bookmark.domain}</dd></div><div><dt>Format</dt><dd>MUTHURLOAD {loadPreview.manifest.version}</dd></div><div><dt>Compression</dt><dd>ZIP · Deflate 6</dd></div></dl>
           {loadPreview.content && <pre className="load-content">{loadPreview.content.slice(0, 1_600)}</pre>}
-          <button className="primary wide" onClick={takeLoad}>Take Load <span>→</span></button>
+          {loadViewOnly
+            ? <button className="primary wide" onClick={() => { setLoadPreview(null); setLoadViewOnly(false); }}>Close</button>
+            : <button className="primary wide" onClick={takeLoad}>Take Load <span>→</span></button>}
         </div>
       </div>}
 

@@ -92,7 +92,7 @@
 
   function renderLoad(opened, payload) {
     const images = bookmarkImages(opened.bookmark);
-    const embeddedLink = KEEPSEEK_URL + "#load=" + payload.load + "&name=" + encodeURIComponent(opened.fileName);
+    const embeddedLink = KEEPSEEK_URL + "#load=" + payload.load + "&name=" + encodeURIComponent(opened.fileName) + "&view=1";
 
     app.innerHTML =
       '<main>' +

@@ -153,10 +153,11 @@ export async function fetchLoadFromUrl(sourceUrl: string, fileName: string) {
 
 export function parseKeepseekLoadLocation(location: Pick<Location, "hash" | "search">) {
   const hashParams = new URLSearchParams(location.hash.startsWith("#") ? location.hash.slice(1) : location.hash);
+  const viewMode = hashParams.has("view");
   const embedded = hashParams.get("load");
   const hashName = hashParams.get("name");
   if (embedded) {
-    return { kind: "embedded" as const, bytes: base64urlDecode(embedded), fileName: hashName ?? "shared.muthur.load" };
+    return { kind: "embedded" as const, bytes: base64urlDecode(embedded), fileName: hashName ?? "shared.muthur.load", viewMode };
   }
   if (hashParams.has("await-load")) {
     const rootHash = hashParams.get("root");
@@ -165,13 +166,15 @@ export function parseKeepseekLoadLocation(location: Pick<Location, "hash" | "sea
       kind: "companion" as const,
       fileName: hashName ?? "shared.muthur.load",
       rootHash,
+      viewMode,
     };
   }
   const params = new URLSearchParams(location.search);
   const remote = params.get("load");
   const remoteName = params.get("name");
+  const remoteViewMode = params.has("view");
   if (remote && /^https?:\/\//i.test(remote)) {
-    return { kind: "remote" as const, url: remote, fileName: remoteName ?? "shared.muthur.load" };
+    return { kind: "remote" as const, url: remote, fileName: remoteName ?? "shared.muthur.load", viewMode: remoteViewMode };
   }
   return null;
 }
