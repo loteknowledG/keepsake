@@ -2,6 +2,20 @@ import initSqlJs, { type Database } from "sql.js";
 import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
 import type { Bookmark } from "./Page";
 
+function parseImages(value: unknown): string[] | undefined {
+  if (!value || typeof value !== "string") return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.every((item) => typeof item === "string") ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function serializeImages(images: string[] | undefined): string | null {
+  return images?.length ? JSON.stringify(images) : null;
+}
+
 export type StorageMode = "opfs" | "indexeddb";
 type KeepsakeData = { bookmarks: Bookmark[]; collections: string[]; mode: StorageMode };
 
@@ -83,6 +97,11 @@ async function openIndexedDbFallback(): Promise<KeepsakeData> {
   } catch {
     // Column already exists.
   }
+  try {
+    fallbackDatabase.run("ALTER TABLE bookmarks ADD COLUMN images TEXT");
+  } catch {
+    // Column already exists.
+  }
   return loadFallbackData();
 }
 
@@ -94,6 +113,7 @@ function loadFallbackData(): KeepsakeData {
       note: String(row.note), collection: String(row.collection), palette: String(row.palette), mark: String(row.mark),
       kind: String(row.kind ?? ""),
       favorite: Boolean(row.favorite), image: row.image ? String(row.image) : undefined,
+      images: parseImages(row.images),
     }))
     .map((row) => ({
       ...row,
@@ -134,8 +154,8 @@ export function saveKeepsakeData(bookmarks: Bookmark[], collections: string[]): 
       fallbackDatabase.run("DELETE FROM collections");
       collections.forEach((name, position) => fallbackDatabase!.run("INSERT INTO collections(name, position) VALUES (?, ?)", [name, position]));
       bookmarks.forEach((item) => fallbackDatabase!.run(
-        "INSERT INTO bookmarks(id,url,domain,title,note,collection,palette,mark,favorite,image,kind) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        [item.id, item.url, item.domain, item.title, item.note, item.collection, item.palette, item.mark, item.favorite ? 1 : 0, item.image ?? null, item.kind],
+        "INSERT INTO bookmarks(id,url,domain,title,note,collection,palette,mark,favorite,image,images,kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        [item.id, item.url, item.domain, item.title, item.note, item.collection, item.palette, item.mark, item.favorite ? 1 : 0, item.image ?? null, serializeImages(item.images), item.kind],
       ));
       fallbackDatabase.run("COMMIT");
       await writeDatabaseBytes(fallbackDatabase.export());

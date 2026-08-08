@@ -8,6 +8,7 @@ import { AiTwotoneDelete } from "react-icons/ai";
 import { IoShareSocialOutline } from "react-icons/io5";
 import { canPlayMedia, resolvePlaylistPlayback, type PlaylistPlayback } from "./video-utils";
 import PlaylistPlayerFrame from "./playlist-player-frame";
+import AdCreativeField from "./ad-creative-field";
 
 export type ScrapKind = "bookmark" | "playlist" | "ad";
 
@@ -23,7 +24,18 @@ export type Bookmark = {
   kind: ScrapKind;
   favorite?: boolean;
   image?: string;
+  images?: string[];
 };
+
+function bookmarkImages(bookmark: Pick<Bookmark, "image" | "images">): string[] {
+  if (bookmark.images?.length) return bookmark.images;
+  if (bookmark.image) return [bookmark.image];
+  return [];
+}
+
+function primaryImage(bookmark: Pick<Bookmark, "image" | "images">): string | undefined {
+  return bookmarkImages(bookmark)[0];
+}
 
 function normalizeScrapKind(kind: unknown, collection?: string): ScrapKind {
   if (kind === "bookmark" || kind === "playlist" || kind === "ad") return kind;
@@ -146,7 +158,7 @@ export default function Home() {
   const [url, setUrl] = useState("");
   const [note, setNote] = useState("");
   const [adHeadline, setAdHeadline] = useState("");
-  const [adImage, setAdImage] = useState("");
+  const [adImages, setAdImages] = useState<string[]>([]);
   const [collection, setCollection] = useState("Inspiration");
   const [captured, setCaptured] = useState<ReturnType<typeof metadataFor> | null>(null);
   const [capturedPlayback, setCapturedPlayback] = useState<PlaylistPlayback | null>(null);
@@ -314,7 +326,8 @@ export default function Home() {
       palette: palettes[bookmarks.length % palettes.length],
       mark: brandMark(headline),
       kind: "ad",
-      image: adImage || undefined,
+      image: adImages[0],
+      images: adImages.length ? adImages : undefined,
     };
     setBookmarks((items) => [saved, ...items]);
     setActive(finalCollection);
@@ -362,7 +375,7 @@ export default function Home() {
     setUrl("");
     setNote("");
     setAdHeadline("");
-    setAdImage("");
+    setAdImages([]);
     setCaptured(null);
     setCapturedPlayback(null);
     setCaptureError("");
@@ -376,7 +389,7 @@ export default function Home() {
     setUrl("");
     setNote("");
     setAdHeadline("");
-    setAdImage("");
+    setAdImages([]);
     setCaptured(null);
     setCapturedPlayback(null);
     setCaptureError("");
@@ -394,7 +407,7 @@ export default function Home() {
     setEditNote(bookmark.note);
     setEditCollection(bookmark.collection);
     if (bookmark.kind === "ad") {
-      setAdImage(bookmark.image ?? "");
+      setAdImages(bookmarkImages(bookmark));
     }
   }
 
@@ -428,7 +441,8 @@ export default function Home() {
         title,
         note: copy,
         collection: editCollection,
-        image: adImage || undefined,
+        image: adImages[0],
+        images: adImages.length ? adImages : undefined,
       } : item));
       setEditTarget(null);
       setNotice(`Updated ${title}.`);
@@ -602,15 +616,6 @@ export default function Home() {
     }
   }
 
-  function pickAdImage(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setAdImage(String(reader.result ?? ""));
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  }
-
   function createCollection(event: FormEvent) {
     event.preventDefault();
     const name = newCollection.trim();
@@ -690,19 +695,28 @@ export default function Home() {
           {visible.map((bookmark, index) => {
             const playable = bookmark.kind === "playlist" && (canPlayMedia(bookmark.url) || bookmark.collection === "Playlists");
             const linked = scrapHasLink(bookmark);
-            const artStyle = bookmark.image ? { backgroundImage: `url(${bookmark.image})` } : undefined;
+            const images = bookmarkImages(bookmark);
+            const coverImage = primaryImage(bookmark);
+            const artStyle = coverImage ? { backgroundImage: `url(${coverImage})` } : undefined;
             const artMark = bookmark.kind === "ad" ? bookmark.mark : /keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark;
             return (
             <article className={`bookmark-card tilt-${index % 4}${playable ? " playable" : ""}${bookmark.kind === "ad" ? " ad-card" : ""}`} key={bookmark.id}>
               {playable ? (
                 <button type="button" className={`art ${bookmark.palette} play-art`} style={artStyle} onClick={() => openPlayer(bookmark)} aria-label={`Play ${bookmark.title}`}>
                   <span className="play-badge">▶</span>
-                  <span className={bookmark.image ? "visually-hidden" : ""}>{artMark}</span>
+                  {images.length > 1 && <span className="ad-image-count">+{images.length - 1}</span>}
+                  <span className={coverImage ? "visually-hidden" : ""}>{artMark}</span>
                 </button>
               ) : linked ? (
-                <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={artStyle} aria-label={`Open ${bookmark.title}`}><span className={bookmark.image ? "visually-hidden" : ""}>{artMark}</span></a>
+                <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={artStyle} aria-label={`Open ${bookmark.title}`}>
+                  {images.length > 1 && <span className="ad-image-count">+{images.length - 1}</span>}
+                  <span className={coverImage ? "visually-hidden" : ""}>{artMark}</span>
+                </a>
               ) : (
-                <div className={`art ${bookmark.palette} art-static`} style={artStyle} aria-hidden={bookmark.image ? undefined : true}><span className={bookmark.image ? "visually-hidden" : ""}>{artMark}</span></div>
+                <div className={`art ${bookmark.palette} art-static`} style={artStyle} aria-hidden={coverImage ? undefined : true}>
+                  {images.length > 1 && <span className="ad-image-count">+{images.length - 1}</span>}
+                  <span className={coverImage ? "visually-hidden" : ""}>{artMark}</span>
+                </div>
               )}
               <div className="card-body">
                 <div className="domain"><span>{bookmark.kind === "ad" ? bookmark.domain : bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
@@ -733,7 +747,7 @@ export default function Home() {
             <label>Headline<input autoFocus required value={adHeadline} onChange={(e) => { setAdHeadline(e.target.value); setCaptureError(""); }} placeholder="e.g. Wake up slow." maxLength={160} /></label>
             <label>Ad copy<textarea required value={note} onChange={(e) => { setNote(e.target.value); setCaptureError(""); }} placeholder="The message you want people to remember." rows={4} /></label>
             <label>Destination URL (optional)<input type="text" value={url} onChange={(e) => { setUrl(e.target.value); setCaptureError(""); }} placeholder="https://brand.com/offer" /></label>
-            <label>Creative image (optional)<input type="file" accept="image/*" onChange={pickAdImage} />{adImage && <div className="ad-image-preview" style={{ backgroundImage: `url(${adImage})` }} role="img" aria-label="Ad creative preview" />}</label>
+            <AdCreativeField images={adImages} onChange={setAdImages} />
             <label>Collection<select value={collection} onChange={(e) => e.target.value === "__new" ? setCollectionOpen(true) : setCollection(e.target.value)}>{userCollections.map((item) => <option key={item}>{item}</option>)}<option value="__new">＋ New collection…</option></select></label>
             {captureError && <p className="form-error" role="alert">{captureError}</p>}
             <button className="primary wide" type="submit">Create ad <span>→</span></button>
@@ -823,7 +837,7 @@ export default function Home() {
               <label>Headline<input autoFocus type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
               <label>Ad copy<textarea required value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={4} /></label>
               <label>Destination URL (optional)<input type="text" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} placeholder="https://brand.com/offer" /></label>
-              <label>Creative image (optional)<input type="file" accept="image/*" onChange={pickAdImage} />{adImage && <div className="ad-image-preview" style={{ backgroundImage: `url(${adImage})` }} role="img" aria-label="Ad creative preview" />}</label>
+              <AdCreativeField images={adImages} onChange={setAdImages} />
             </> : <>
               <label>Website URL<input autoFocus type="text" required value={editUrl} onChange={(e) => setEditUrl(e.target.value)} /></label>
               <label>Title<input type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)} maxLength={160} /></label>
