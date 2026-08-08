@@ -868,13 +868,13 @@ export default function Home() {
     <main>
       <header className="topbar">
         <a className="brand" href="#top" aria-label="Keepseek home">Keepseek</a>
-        <nav aria-label="Primary navigation"><a href="#scraps">Library</a><a href="#scraps">Collections</a></nav>
+        <nav aria-label="Primary navigation"><a href="#scraps">Library</a><a href="#scraps">Collections</a><a href="#about">How it works</a></nav>
         <button className="avatar" aria-label="Open profile">QL</button>
       </header>
 
       <section className="hero" id="top">
         <h1>Keep what matters,<br/>then <em>seek it again.</em></h1>
-        <p className="intro">Keepseek automatically saves title, images, links, and metadata<br className="desktop-break"/> so you can find it again—and add your own notes.</p>
+        <p className="intro">Save bookmarks, playlists, and ads on your device.<br className="desktop-break"/> Organize in collections, then share as verified MUTHUR Loads.</p>
         <div className="capture-row">
           <div className="add-menu" ref={addMenuRef}>
             <button
@@ -973,6 +973,28 @@ export default function Home() {
             </article>
           );})}
           {hydrated && visible.length === 0 && <div className="empty"><span>✦</span><h3>No scraps hiding here.</h3><p>Try another collection or save something new.</p></div>}
+        </div>
+      </section>
+
+      <section className="how" id="about">
+        <p className="kicker">HOW IT WORKS</p>
+        <h2>Keep. Organize. Share.</h2>
+        <div className="steps">
+          <div>
+            <b>01</b>
+            <h3>Add a scrap</h3>
+            <p>Bookmark a link, save a playlist or embed, or compose an ad with headline, copy, and creative.</p>
+          </div>
+          <div>
+            <b>02</b>
+            <h3>Organize on your device</h3>
+            <p>Collections, favorites, and search—stored locally in SQLite on this browser. No account required.</p>
+          </div>
+          <div>
+            <b>03</b>
+            <h3>Share verified Loads</h3>
+            <p>Package offline HTML, send Load + link, or open shared scraps on a full view page—SHA-256 verified.</p>
+          </div>
         </div>
       </section>
 
