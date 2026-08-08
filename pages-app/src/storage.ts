@@ -60,11 +60,31 @@ worker.onmessage = (event: MessageEvent<{ id: number; ok: boolean; result?: unkn
   if (event.data.ok) callback.resolve(event.data.result);
   else callback.reject(new Error(event.data.error ?? "SQLite worker failed"));
 };
+worker.onerror = () => {
+  for (const [id, callback] of pending.entries()) {
+    callback.reject(new Error("SQLite worker crashed"));
+    pending.delete(id);
+  }
+};
 
-function callWorker<T>(type: "init" | "save", payload?: unknown): Promise<T> {
+function callWorker<T>(type: "init" | "save", payload?: unknown, timeoutMs = type === "init" ? 8_000 : 20_000): Promise<T> {
   const id = ++requestId;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
+    const timer = setTimeout(() => {
+      if (!pending.has(id)) return;
+      pending.delete(id);
+      reject(new Error(`SQLite worker timed out during ${type}`));
+    }, timeoutMs);
+    pending.set(id, {
+      resolve: (value) => {
+        clearTimeout(timer);
+        resolve(value as T);
+      },
+      reject: (reason) => {
+        clearTimeout(timer);
+        reject(reason);
+      },
+    });
     worker.postMessage({ id, type, payload });
   });
 }

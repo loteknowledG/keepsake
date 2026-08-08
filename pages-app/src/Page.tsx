@@ -190,7 +190,33 @@ export default function Home() {
   const addMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    openKeepsakeDatabase().then(async (stored) => {
+    let finished = false;
+
+    function finishHydration(nextBookmarks: Bookmark[], nextCollections: string[], mode: StorageMode, noticeMessage?: string) {
+      if (finished) return;
+      finished = true;
+      setBookmarks(nextBookmarks);
+      setUserCollections(nextCollections);
+      setStorageMode(mode);
+      setStorageReady(true);
+      setHydrated(true);
+      if (noticeMessage) setNotice(noticeMessage);
+    }
+
+    const safetyTimer = window.setTimeout(() => {
+      if (finished) return;
+      const backup = loadKeepsakeBackup();
+      finishHydration(
+        (backup?.bookmarks.length ? backup.bookmarks : starterBookmarks)
+          .map((item: Bookmark) => ({ ...item, kind: normalizeScrapKind(item.kind, item.collection) }))
+          .map(repairAdBookmark),
+        backup?.collections.length ? backup.collections : defaultCollections,
+        "indexeddb",
+        "Storage is taking too long. Loaded from local backup.",
+      );
+    }, 12_000);
+
+    openKeepsakeDatabase().then((stored) => {
       const legacyBookmarks = window.localStorage.getItem("keepsake-bookmarks");
       const legacyCollections = window.localStorage.getItem("keepsake-collections");
       const backup = loadKeepsakeBackup();
@@ -213,30 +239,26 @@ export default function Home() {
           : legacyCollections
             ? JSON.parse(legacyCollections)
             : defaultCollections;
-      setBookmarks(nextBookmarks);
-      setUserCollections(nextCollections);
-      setStorageMode(stored.mode);
-      if (!stored.bookmarks.length) await saveKeepsakeData(nextBookmarks, nextCollections);
+      finishHydration(nextBookmarks, nextCollections, stored.mode);
+      if (!stored.bookmarks.length) {
+        void saveKeepsakeData(nextBookmarks, nextCollections);
+      }
       if (legacyBookmarks || legacyCollections) {
         window.localStorage.removeItem("keepsake-bookmarks");
         window.localStorage.removeItem("keepsake-collections");
       }
-      setStorageReady(true);
-      setHydrated(true);
     }).catch(() => {
       const backup = loadKeepsakeBackup();
-      const nextBookmarks = (backup?.bookmarks.length ? backup.bookmarks : starterBookmarks)
-        .map((item: Bookmark) => ({
-          ...item,
-          kind: normalizeScrapKind(item.kind, item.collection),
-        }))
-        .map(repairAdBookmark);
-      const nextCollections = backup?.collections.length ? backup.collections : defaultCollections;
-      setBookmarks(nextBookmarks);
-      setUserCollections(nextCollections);
-      setStorageReady(true);
-      setHydrated(true);
-      setNotice("SQLite could not start. Changes are saved to this browser's local backup.");
+      finishHydration(
+        (backup?.bookmarks.length ? backup.bookmarks : starterBookmarks)
+          .map((item: Bookmark) => ({ ...item, kind: normalizeScrapKind(item.kind, item.collection) }))
+          .map(repairAdBookmark),
+        backup?.collections.length ? backup.collections : defaultCollections,
+        "indexeddb",
+        "SQLite could not start. Changes are saved to this browser's local backup.",
+      );
+    }).finally(() => {
+      window.clearTimeout(safetyTimer);
     });
   }, []);
 
