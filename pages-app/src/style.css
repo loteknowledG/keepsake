@@ -100,6 +100,17 @@ body.player-page{margin:0;padding:12px;background:var(--paper);color:var(--ink)}
 .play-art{width:calc(100% - 20px);padding:0;cursor:pointer}.play-badge{position:absolute;inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:50%;background:rgba(23,23,19,.72);color:var(--paper);display:grid;place-items:center;font-size:18px;border:2px solid var(--paper);z-index:2}
 .title-play{border:0;background:transparent;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;font-family:Georgia,serif;font-size:20px;line-height:1.08;font-weight:600}.title-play:hover{text-decoration:underline;text-decoration-color:var(--coral)}
 .play-action{background:#dfeccf}
+.view-action{background:#f3d6bf}
+.view-art{width:calc(100% - 20px);padding:0;cursor:pointer}
+.view-badge{position:absolute;inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:50%;background:rgba(23,23,19,.72);color:var(--paper);display:grid;place-items:center;font-size:22px;border:2px solid var(--paper);z-index:2}
+.ad-backdrop{z-index:27}
+.ad-modal{width:min(760px,100%);max-height:min(92vh,900px);overflow:auto}
+.ad-view-icon{background:#f3d6bf}
+.ad-view-domain{margin:0 0 6px;color:var(--olive);font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+.ad-view-copy{margin:0 0 18px;font-family:Georgia,serif;font-size:18px;line-height:1.5;color:#55554f;font-style:italic}
+.ad-view-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:0 0 8px}
+.ad-view-gallery img{width:100%;aspect-ratio:4/3;object-fit:cover;border:1.5px solid var(--ink);border-radius:14px 18px 13px 16px;box-shadow:4px 5px 0 rgba(23,23,19,.12)}
+.ad-view-placeholder{aspect-ratio:16/9;margin:0 0 8px;display:grid;place-items:center;font-family:Georgia,serif;font-size:clamp(32px,6vw,72px);font-weight:700}
 .icon-btn{display:grid;place-items:center;width:30px;height:30px;padding:0;border:1px solid var(--ink);border-radius:8px 10px 7px 11px;font-size:16px;line-height:1;cursor:pointer;box-shadow:2px 3px 0 var(--ink);transition:.16s ease}
 .icon-btn:hover{transform:translate(-1px,-2px);box-shadow:3px 5px 0 var(--ink)}
 .icon-btn:active{transform:translate(2px,2px);box-shadow:0 0 0 var(--ink)}

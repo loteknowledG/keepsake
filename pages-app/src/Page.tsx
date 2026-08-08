@@ -164,6 +164,7 @@ export default function Home() {
   const [capturedPlayback, setCapturedPlayback] = useState<PlaylistPlayback | null>(null);
   const [captureError, setCaptureError] = useState("");
   const [playerTarget, setPlayerTarget] = useState<Bookmark | null>(null);
+  const [adTarget, setAdTarget] = useState<Bookmark | null>(null);
   const [notice, setNotice] = useState("");
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [newCollection, setNewCollection] = useState("");
@@ -366,6 +367,11 @@ export default function Home() {
   function openPlayer(bookmark: Bookmark) {
     if (!canPlayMedia(bookmark.url)) return;
     setPlayerTarget(bookmark);
+  }
+
+  function openAd(bookmark: Bookmark) {
+    if (bookmark.kind !== "ad") return;
+    setAdTarget(bookmark);
   }
 
   function openAdd(kind: AddKind) {
@@ -693,36 +699,40 @@ export default function Home() {
         </div>
         <div className="card-grid">
           {visible.map((bookmark, index) => {
+            const isAd = bookmark.kind === "ad";
             const playable = bookmark.kind === "playlist" && (canPlayMedia(bookmark.url) || bookmark.collection === "Playlists");
-            const linked = scrapHasLink(bookmark);
+            const linked = !isAd && scrapHasLink(bookmark);
             const images = bookmarkImages(bookmark);
             const coverImage = primaryImage(bookmark);
             const artStyle = coverImage ? { backgroundImage: `url(${coverImage})` } : undefined;
-            const artMark = bookmark.kind === "ad" ? bookmark.mark : /keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark;
+            const artMark = isAd ? bookmark.mark : /keepsake|keepseek/i.test(bookmark.domain) ? "Keepseek" : bookmark.mark;
             return (
-            <article className={`bookmark-card tilt-${index % 4}${playable ? " playable" : ""}${bookmark.kind === "ad" ? " ad-card" : ""}`} key={bookmark.id}>
+            <article className={`bookmark-card tilt-${index % 4}${playable ? " playable" : ""}${isAd ? " ad-card" : ""}`} key={bookmark.id}>
               {playable ? (
                 <button type="button" className={`art ${bookmark.palette} play-art`} style={artStyle} onClick={() => openPlayer(bookmark)} aria-label={`Play ${bookmark.title}`}>
                   <span className="play-badge">▶</span>
+                  <span className={coverImage ? "visually-hidden" : ""}>{artMark}</span>
+                </button>
+              ) : isAd ? (
+                <button type="button" className={`art ${bookmark.palette} view-art`} style={artStyle} onClick={() => openAd(bookmark)} aria-label={`View ${bookmark.title}`}>
+                  <span className="view-badge">◎</span>
                   {images.length > 1 && <span className="ad-image-count">+{images.length - 1}</span>}
                   <span className={coverImage ? "visually-hidden" : ""}>{artMark}</span>
                 </button>
               ) : linked ? (
                 <a href={bookmark.url} target="_blank" rel="noreferrer" className={`art ${bookmark.palette}`} style={artStyle} aria-label={`Open ${bookmark.title}`}>
-                  {images.length > 1 && <span className="ad-image-count">+{images.length - 1}</span>}
                   <span className={coverImage ? "visually-hidden" : ""}>{artMark}</span>
                 </a>
               ) : (
                 <div className={`art ${bookmark.palette} art-static`} style={artStyle} aria-hidden={coverImage ? undefined : true}>
-                  {images.length > 1 && <span className="ad-image-count">+{images.length - 1}</span>}
                   <span className={coverImage ? "visually-hidden" : ""}>{artMark}</span>
                 </div>
               )}
               <div className="card-body">
-                <div className="domain"><span>{bookmark.kind === "ad" ? bookmark.domain : bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
-                <h3>{playable ? <button type="button" className="title-play" onClick={() => openPlayer(bookmark)}>{bookmark.title}</button> : linked ? <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a> : <span>{bookmark.title}</span>}</h3>
+                <div className="domain"><span>{bookmark.domain}</span><button onClick={() => toggleFavorite(bookmark.id)} aria-label={bookmark.favorite ? "Remove favorite" : "Add favorite"}>{bookmark.favorite ? "♥" : "♡"}</button></div>
+                <h3>{playable ? <button type="button" className="title-play" onClick={() => openPlayer(bookmark)}>{bookmark.title}</button> : isAd ? <button type="button" className="title-play" onClick={() => openAd(bookmark)}>{bookmark.title}</button> : linked ? <a href={bookmark.url} target="_blank" rel="noreferrer">{bookmark.title}</a> : <span>{bookmark.title}</span>}</h3>
                 <p className="note">“{bookmark.note}”</p>
-                <div className="card-footer"><span className="tag">{bookmark.collection}</span><span className="tag tag-kind">{bookmark.kind}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}<button type="button" className={`icon-btn edit-icon-btn edit-${bookmark.palette}`} onClick={() => startEdit(bookmark)} aria-label={`Edit ${bookmark.title}`}><VscEditCompact aria-hidden="true" /></button><button type="button" className={`icon-btn delete-icon-btn delete-${bookmark.palette}`} onClick={() => setDeleteTarget(bookmark)} aria-label={`Delete ${bookmark.title}`}><AiTwotoneDelete aria-hidden="true" /></button><button type="button" className={`icon-btn share-icon-btn share-${bookmark.palette}`} onClick={() => setShareTarget(bookmark)} aria-label={`Share ${bookmark.title}`}><IoShareSocialOutline aria-hidden="true" /></button></div></div>
+                <div className="card-footer"><span className="tag">{bookmark.collection}</span><span className="tag tag-kind">{bookmark.kind}</span><div className="card-actions">{playable && <button className="load-action play-action" onClick={() => openPlayer(bookmark)}>▶ Play</button>}{isAd && <button type="button" className="load-action view-action" onClick={() => openAd(bookmark)}>◎ View</button>}<button type="button" className={`icon-btn edit-icon-btn edit-${bookmark.palette}`} onClick={() => startEdit(bookmark)} aria-label={`Edit ${bookmark.title}`}><VscEditCompact aria-hidden="true" /></button><button type="button" className={`icon-btn delete-icon-btn delete-${bookmark.palette}`} onClick={() => setDeleteTarget(bookmark)} aria-label={`Delete ${bookmark.title}`}><AiTwotoneDelete aria-hidden="true" /></button><button type="button" className={`icon-btn share-icon-btn share-${bookmark.palette}`} onClick={() => setShareTarget(bookmark)} aria-label={`Share ${bookmark.title}`}><IoShareSocialOutline aria-hidden="true" /></button></div></div>
               </div>
             </article>
           );})}
@@ -793,6 +803,37 @@ export default function Home() {
           </div>
         </div>
       </div>}
+
+      {adTarget && (() => {
+        const images = bookmarkImages(adTarget);
+        const linked = scrapHasLink(adTarget);
+        return (
+          <div className="modal-backdrop ad-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setAdTarget(null)}>
+            <div className="modal ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-title">
+              <button className="close" onClick={() => setAdTarget(null)} aria-label="Close">×</button>
+              <span className="modal-icon ad-view-icon">◎</span>
+              <p className="kicker">AD</p>
+              <p className="ad-view-domain">{adTarget.domain}</p>
+              <h2 id="ad-title">{adTarget.title}</h2>
+              <p className="ad-view-copy">“{adTarget.note}”</p>
+              {images.length > 0 ? (
+                <div className="ad-view-gallery">
+                  {images.map((src, imageIndex) => (
+                    <img key={`${imageIndex}-${src.slice(0, 48)}`} src={src} alt={`${adTarget.title} creative ${imageIndex + 1}`} />
+                  ))}
+                </div>
+              ) : (
+                <div className={`ad-view-placeholder art ${adTarget.palette}`} aria-hidden="true"><span>{adTarget.mark}</span></div>
+              )}
+              <div className="player-actions">
+                {linked && <a href={adTarget.url} target="_blank" rel="noreferrer">Open link <span>↗</span></a>}
+                <button type="button" onClick={() => { setAdTarget(null); startEdit(adTarget); }}>Edit ad</button>
+                <button type="button" onClick={() => setAdTarget(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {collectionOpen && <div className="modal-backdrop collection-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setCollectionOpen(false)}>
         <div className="modal collection-modal" role="dialog" aria-modal="true" aria-labelledby="collection-title">
