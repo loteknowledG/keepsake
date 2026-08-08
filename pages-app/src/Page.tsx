@@ -3,7 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, flushKeepsakeData, backupKeepsakeData, loadKeepsakeBackup, type StorageMode } from "./storage";
 import { adDestinationUrl, adDomainFromDestination, adPersistUrl, isAdStorageUrl } from "./ad-url";
-import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, parseKeepseekLoadLocation, type OpenedLoad } from "./load-format";
+import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, parseKeepseekLoadLocation, shareLoadBundleNatively, type OpenedLoad } from "./load-format";
 import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
 import { IoShareSocialOutline } from "react-icons/io5";
@@ -181,7 +181,8 @@ export default function Home() {
   const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
   const [sharing, setSharing] = useState<"load" | "link" | "bundle" | null>(null);
   const [shareLink, setShareLink] = useState("");
-  const [shareLinkKind, setShareLinkKind] = useState<"embedded" | "hosted" | "muthur">("embedded");
+  const [shareLinkKind, setShareLinkKind] = useState<"embedded" | "companion" | "muthur">("embedded");
+  const [pendingCompanionLoad, setPendingCompanionLoad] = useState<{ fileName: string; rootHash: string } | null>(null);
   const [editTarget, setEditTarget] = useState<Bookmark | null>(null);
   const [editUrl, setEditUrl] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -286,13 +287,20 @@ export default function Home() {
     if (!target) return;
     openedLoadFromUrl.current = true;
     const url = new URL(window.location.href);
-    if (target.kind === "embedded") {
+    if (target.kind === "embedded" || target.kind === "companion") {
       url.hash = "";
     } else {
       url.searchParams.delete("load");
       url.searchParams.delete("name");
     }
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+
+    if (target.kind === "companion") {
+      setPendingCompanionLoad({ fileName: target.fileName, rootHash: target.rootHash });
+      setNotice(`Choose ${target.fileName} to open this shared Load.`);
+      window.setTimeout(() => loadRef.current?.click(), 0);
+      return;
+    }
 
     void (async () => {
       try {
@@ -626,13 +634,25 @@ export default function Home() {
     setNotice("Building Load + open link…");
     try {
       const created = await createKeepseekLoadBundleLink(bookmark);
-      downloadLoadFile(created.file);
+      let sharedNatively = false;
+      try {
+        sharedNatively = await shareLoadBundleNatively({
+          file: created.file,
+          openLink: created.openLink,
+          fileName: created.fileName,
+        });
+      } catch {
+        sharedNatively = false;
+      }
+      if (!sharedNatively) downloadLoadFile(created.file);
       setShareLink(created.openLink);
       setShareLinkKind(created.linkKind);
       setNotice(
-        created.linkKind === "hosted"
-          ? `${created.fileName} downloaded. Hosted open link ready (${created.bytes.toLocaleString()} bytes). Send both.`
-          : `${created.fileName} downloaded. Open link ready (${created.bytes.toLocaleString()} bytes). Send both.`,
+        sharedNatively
+          ? `Shared ${created.fileName} and open link together (${created.bytes.toLocaleString()} bytes).`
+          : created.linkKind === "companion"
+            ? `${created.fileName} downloaded. Companion open link ready (${created.bytes.toLocaleString()} bytes). Send both.`
+            : `${created.fileName} downloaded. Open link ready (${created.bytes.toLocaleString()} bytes). Send both.`,
       );
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Keepseek could not prepare Load + link.");
@@ -675,9 +695,15 @@ export default function Home() {
   async function inspectLoad(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+    const expected = pendingCompanionLoad;
     try {
       setNotice("Verifying Load integrity…");
-      setLoadPreview(await openLoad(file));
+      const preview = await openLoad(file);
+      if (expected && preview.manifest.hashing.root !== expected.rootHash) {
+        throw new Error("This file does not match the shared Load link.");
+      }
+      setLoadPreview(preview);
+      setPendingCompanionLoad(null);
       setNotice("Load verified. Preview before taking it.");
     } catch (error) {
       setLoadPreview(null);
@@ -1024,16 +1050,16 @@ export default function Home() {
           <button className="close" onClick={closeShare} aria-label="Close">×</button>
           <span className="modal-icon share-icon">↗</span><p className="kicker">SHARE KNOWLEDGE</p><h2 id="share-title">Shoot the Load.</h2><p>{shareTarget.title}</p>
           {!shareLink ? <div className="share-options">
-            <button onClick={() => shareLoadAndLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "bundle" ? "PACKING…" : "Load + link"}</strong><span>Download `.muthur.load` and get an open link. Send both; the link verifies and previews the Load in Keepseek.</span></button>
+            <button onClick={() => shareLoadAndLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "bundle" ? "PACKING…" : "Load + link"}</strong><span>Share the `.muthur.load` file and an open link together. No hosting — the link opens the Load you send.</span></button>
             <button onClick={() => shareLoad(shareTarget)} disabled={sharing !== null}><strong>{sharing === "load" ? "PACKING…" : "muthur.load only"}</strong><span>Download the owned, offline `.muthur.load` file with no link.</span></button>
             <button onClick={() => prepareMuthurLink(shareTarget)} disabled={sharing !== null}><strong>{sharing === "link" ? "LINKING…" : "muthur.link"}</strong><span>Embedded browser link for small Loads (under 128 KB).</span></button>
           </div> : <div className="share-ready">
             <strong>{shareLinkKind === "muthur" ? "muthur.link ready" : "Load + link ready"}</strong>
             <p>{shareLinkKind === "muthur"
               ? "This public-by-possession link contains the complete verified Load in MUTHUR."
-              : shareLinkKind === "hosted"
-                ? "Send the downloaded file and this link. Opening the link fetches and verifies the hosted Load in Keepseek."
-                : "Send the downloaded file and this link. Opening the link verifies and previews the Load in Keepseek."}</p>
+              : shareLinkKind === "companion"
+                ? "Send the file and this link together. Opening the link asks for that `.muthur.load` and verifies it."
+                : "Send the file and this link together. Opening the link verifies and previews the Load in Keepseek."}</p>
             <a href={shareLink}>{shareLinkKind === "muthur" ? "Open muthur.link" : "Open link"} <span>↗</span></a>
             <button onClick={copyPreparedLink}>Copy Link</button>
           </div>}
