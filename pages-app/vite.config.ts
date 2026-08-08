@@ -10,13 +10,13 @@ const isolatedHeaders: Record<string, string> = {
   "Cross-Origin-Embedder-Policy": "require-corp",
 };
 
-function isPlayerDocument(url: string | undefined) {
+function skipsIsolationHeaders(url: string | undefined) {
   const path = url?.split("?")[0] ?? "";
-  return path === "/player.html" || path === "/player";
+  return path === "/player.html" || path === "/player" || path === "/view.html" || path === "/view";
 }
 
 function applyIsolationHeaders(req: Connect.IncomingMessage, res: Connect.ServerResponse, next: Connect.NextFunction) {
-  if (!isPlayerDocument(req.url)) {
+  if (!skipsIsolationHeaders(req.url)) {
     for (const [key, value] of Object.entries(isolatedHeaders)) {
       res.setHeader(key, value);
     }
@@ -49,6 +49,7 @@ export default defineConfig({
       input: {
         main: resolve(rootDir, "index.html"),
         player: resolve(rootDir, "player.html"),
+        view: resolve(rootDir, "view.html"),
       },
     },
   },

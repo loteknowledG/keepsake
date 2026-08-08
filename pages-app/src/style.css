@@ -145,6 +145,20 @@ body.player-page{margin:0;padding:12px;background:var(--paper);color:var(--ink)}
 .share-icon-btn.share-violet{color:#f0f;background:#fff}
 .share-icon-btn.share-coral{color:#fff;background:#000}
 .share-icon-btn.share-garden{color:#000;background:#0ff}
+.view-page-body{margin:0;background:var(--paper);color:var(--ink)}
+.view-page{min-height:100vh;width:min(820px,calc(100% - 32px));margin:0 auto;padding:28px 0 56px}
+.view-page-header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:28px;padding-bottom:16px;border-bottom:1.5px solid var(--line)}
+.view-page-brand{font-family:Georgia,serif;font-size:28px;font-weight:700;color:var(--ink);text-decoration:none}
+.view-page-label{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--olive)}
+.view-page-status,.view-page-error,.view-page-content{padding:8px 0}
+.view-page-content h1{margin:0 0 16px;font-size:clamp(2rem,5vw,3.4rem);line-height:.95}
+.view-page-note,.view-page-error p{color:#55554f;line-height:1.55;white-space:pre-wrap}
+.view-page-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px}
+.view-page-action{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--ink);border-radius:11px;padding:12px 16px;background:var(--paper);color:var(--ink);font-weight:800;text-decoration:none;box-shadow:3px 4px 0 var(--ink)}
+.view-page-action.primary{background:var(--green)}
+.view-page-action.secondary{background:var(--bone)}
+.view-page-content .load-content{max-height:none;margin-top:18px}
+.view-page-content .media-player{margin-top:18px}
 @keyframes arrive{from{opacity:0;transform:translateY(18px) rotate(0)}to{opacity:1}}@keyframes fade{from{opacity:0}}
 @media(max-width:1100px){.card-grid{grid-template-columns:repeat(3,1fr)}.scribble{display:none}}
 @media(max-width:760px){.topbar{padding:0 20px}.topbar nav{display:none}.hero{padding:55px 20px 20px}.intro{font-size:17px}.desktop-break{display:none}.capture-row{grid-template-columns:1fr;gap:14px}.add-menu{grid-row:2}.library{padding:35px 20px 80px}.library-head{display:block}.data-actions{margin-top:18px;flex-wrap:wrap}.local-pill{flex-basis:100%;margin-bottom:4px}.scrap-count{display:none}.card-grid{grid-template-columns:repeat(2,1fr)}.how{margin:0 20px 70px;padding:30px}.steps{grid-template-columns:1fr}.modal{padding:34px 23px}.load-meta{grid-template-columns:1fr}footer{flex-direction:column;gap:20px;text-align:center}}

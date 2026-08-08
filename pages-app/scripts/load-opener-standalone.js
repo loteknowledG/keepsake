@@ -107,7 +107,7 @@
       '<button type="button" class="secondary" id="download-load">Download .muthur.load</button></div></main>';
 
     document.getElementById("open-keepseek")?.addEventListener("click", () => {
-      const receiver = window.open(keepseekOrigin + "#receive-load&view=1", "_blank");
+      const receiver = window.open(keepseekOrigin + "view#receive-load&view=1", "_blank");
       if (!receiver) {
         window.alert("Allow pop-ups, then click Open in Keepseek again.");
         return;

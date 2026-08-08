@@ -2,8 +2,8 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { openKeepsakeDatabase, saveKeepsakeData, flushKeepsakeData, backupKeepsakeData, loadKeepsakeBackup, type StorageMode } from "./storage";
-import { adDestinationUrl, adDomainFromDestination, adExternalLinkUrl, adPersistUrl, isAdStorageUrl } from "./ad-url";
-import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, openLoadFromSharedPayload, parseKeepseekLoadLocation, shareLoadBundleNatively, type OpenedLoad } from "./load-format";
+import { adDestinationUrl, adDomainFromDestination, adPersistUrl, isAdStorageUrl } from "./ad-url";
+import { createKeepseekLoadBundleLink, createLoad, createMuthurLink, fetchLoadFromUrl, openLoad, openLoadFromBytes, parseKeepseekLoadLocation, shareLoadBundleNatively, type OpenedLoad } from "./load-format";
 import { createLoadOpenerHtml, shareLoadOpenerNatively } from "./load-opener-html";
 import { VscEditCompact } from "react-icons/vsc";
 import { AiTwotoneDelete } from "react-icons/ai";
@@ -11,7 +11,6 @@ import { IoShareSocialOutline } from "react-icons/io5";
 import { canPlayMedia, resolvePlaylistPlayback, type PlaylistPlayback } from "./video-utils";
 import PlaylistPlayerFrame from "./playlist-player-frame";
 import AdCreativeField from "./ad-creative-field";
-import AdImageGallery from "./ad-image-gallery";
 
 export type ScrapKind = "bookmark" | "playlist" | "ad";
 
@@ -172,20 +171,16 @@ export default function Home() {
   const [capturedPlayback, setCapturedPlayback] = useState<PlaylistPlayback | null>(null);
   const [captureError, setCaptureError] = useState("");
   const [playerTarget, setPlayerTarget] = useState<Bookmark | null>(null);
-  const [adTarget, setAdTarget] = useState<Bookmark | null>(null);
-  const [imageGallery, setImageGallery] = useState<{ images: string[]; index: number; title: string } | null>(null);
   const [notice, setNotice] = useState("");
   const [collectionOpen, setCollectionOpen] = useState(false);
   const [newCollection, setNewCollection] = useState("");
   const [loadPreview, setLoadPreview] = useState<OpenedLoad | null>(null);
-  const [loadViewOnly, setLoadViewOnly] = useState(false);
-  const [adViewOnly, setAdViewOnly] = useState(false);
   const [creatingLoad, setCreatingLoad] = useState<number | null>(null);
   const [shareTarget, setShareTarget] = useState<Bookmark | null>(null);
   const [sharing, setSharing] = useState<"load" | "link" | "bundle" | "openfile" | null>(null);
   const [shareLink, setShareLink] = useState("");
   const [shareLinkKind, setShareLinkKind] = useState<"embedded" | "companion" | "muthur">("embedded");
-  const [pendingCompanionLoad, setPendingCompanionLoad] = useState<{ fileName: string; rootHash: string; viewMode: boolean } | null>(null);
+  const [pendingCompanionLoad, setPendingCompanionLoad] = useState<{ fileName: string; rootHash: string } | null>(null);
   const [editTarget, setEditTarget] = useState<Bookmark | null>(null);
   const [editUrl, setEditUrl] = useState("");
   const [editTitle, setEditTitle] = useState("");
@@ -196,7 +191,6 @@ export default function Home() {
   const loadRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const openedLoadFromUrl = useRef(false);
-  const receivedSharedLoad = useRef(false);
 
   useEffect(() => {
     let finished = false;
@@ -289,9 +283,13 @@ export default function Home() {
     if (!hydrated || openedLoadFromUrl.current) return;
     const target = parseKeepseekLoadLocation(window.location);
     if (!target) return;
+    if (target.kind === "receive" || target.viewMode || target.kind === "companion") {
+      window.location.replace(`/view${window.location.search}${window.location.hash}`);
+      return;
+    }
     openedLoadFromUrl.current = true;
     const url = new URL(window.location.href);
-    if (target.kind === "embedded" || target.kind === "companion" || target.kind === "receive") {
+    if (target.kind === "embedded") {
       url.hash = "";
     } else {
       url.searchParams.delete("load");
@@ -299,59 +297,18 @@ export default function Home() {
     }
     window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 
-    if (target.kind === "companion") {
-      setPendingCompanionLoad({ fileName: target.fileName, rootHash: target.rootHash, viewMode: target.viewMode });
-      setNotice(`Choose ${target.fileName} to open this shared Load.`);
-      window.setTimeout(() => loadRef.current?.click(), 0);
-      return;
-    }
-
-    if (target.kind === "receive") {
-      setNotice("Waiting for shared Load from package…");
-      return;
-    }
-
     void (async () => {
       try {
         setNotice("Fetching shared Load…");
         const preview = target.kind === "embedded"
           ? await openLoadFromBytes(target.bytes, target.fileName)
           : await fetchLoadFromUrl(target.url, target.fileName);
-        presentOpenedLoad(preview, "viewMode" in target ? target.viewMode : false);
+        setLoadPreview(preview);
+        setNotice("Shared Load verified. Preview before taking it.");
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "That shared Load could not be opened.");
       }
     })();
-  }, [hydrated]);
-
-  useEffect(() => {
-    if (!hydrated) return;
-
-    async function acceptSharedLoadPayload(payload: { load?: string; fileName?: string; root?: string }) {
-      if (!payload?.load || receivedSharedLoad.current) return;
-      receivedSharedLoad.current = true;
-      try {
-        setNotice("Opening shared Load in view mode…");
-        presentOpenedLoad(await openLoadFromSharedPayload({
-          load: payload.load,
-          fileName: payload.fileName,
-          root: payload.root,
-        }), true);
-      } catch (error) {
-        receivedSharedLoad.current = false;
-        setNotice(error instanceof Error ? error.message : "That shared Load could not be opened.");
-      }
-    }
-
-    function onMessage(event: MessageEvent) {
-      if (event.data?.type !== "keepseek-shared-load") return;
-      const trustedOrigin = event.origin === window.location.origin || event.origin === "null" || event.origin.startsWith("file:");
-      if (!trustedOrigin) return;
-      void acceptSharedLoadPayload(event.data.payload);
-    }
-
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
   }, [hydrated]);
 
   function persistNow(nextBookmarks: Bookmark[], nextCollections: string[] = userCollections) {
@@ -520,45 +477,10 @@ export default function Home() {
     setPlayerTarget(bookmark);
   }
 
-  function openAd(bookmark: Bookmark, viewOnly = false) {
+  function openAd(bookmark: Bookmark) {
     if (bookmark.kind !== "ad") return;
-    setAdViewOnly(viewOnly);
-    setAdTarget(repairAdBookmark(bookmark));
-  }
-
-  function presentOpenedLoad(opened: OpenedLoad, viewMode: boolean) {
-    const bookmark: Bookmark = {
-      ...opened.bookmark,
-      kind: normalizeScrapKind(opened.bookmark.kind, opened.bookmark.collection),
-    };
-    if (viewMode) {
-      switch (bookmark.kind) {
-        case "ad":
-          openAd(bookmark, true);
-          setNotice("Shared ad opened in view mode.");
-          return;
-        case "playlist":
-          if (canPlayMedia(bookmark.url)) {
-            setPlayerTarget(bookmark);
-            setNotice("Shared playlist opened in view mode.");
-            return;
-          }
-          break;
-        case "bookmark":
-          break;
-        default: {
-          const _exhaustive: never = bookmark.kind;
-          return _exhaustive;
-        }
-      }
-      setLoadViewOnly(true);
-      setLoadPreview(opened);
-      setNotice("Shared Load opened in view mode.");
-      return;
-    }
-    setLoadViewOnly(false);
-    setLoadPreview(opened);
-    setNotice("Shared Load verified. Preview before taking it.");
+    sessionStorage.setItem("keepseek-local-view", JSON.stringify({ bookmark: repairAdBookmark(bookmark) }));
+    window.location.href = "/view#local=1";
   }
 
   function openAdd(kind: AddKind) {
@@ -804,10 +726,10 @@ export default function Home() {
         throw new Error("This file does not match the shared Load link.");
       }
       setPendingCompanionLoad(null);
-      presentOpenedLoad(preview, expected?.viewMode ?? false);
+      setLoadPreview(preview);
+      setNotice("Load verified. Preview before taking it.");
     } catch (error) {
       setLoadPreview(null);
-      setLoadViewOnly(false);
       setNotice(error instanceof Error ? error.message : "That file is not a valid Load.");
     } finally {
       event.target.value = "";
@@ -829,7 +751,6 @@ export default function Home() {
     setUserCollections((current) => current.includes(incoming.collection) ? current : [...current, incoming.collection]);
     setActive(incoming.collection);
     setLoadPreview(null);
-    setLoadViewOnly(false);
     setNotice(`Took ${loadPreview.fileName} into Keepseek.`);
   }
 
@@ -1075,55 +996,6 @@ export default function Home() {
         </div>
       </div>}
 
-      {adTarget && (() => {
-        const images = bookmarkImages(adTarget);
-        const adLink = adExternalLinkUrl(adTarget.url);
-        return (
-          <div className="modal-backdrop ad-backdrop" onMouseDown={(e) => e.target === e.currentTarget && (setAdTarget(null), setAdViewOnly(false))}>
-            <div className="modal ad-modal" role="dialog" aria-modal="true" aria-labelledby="ad-title">
-              <button className="close" onClick={() => { setAdTarget(null); setAdViewOnly(false); }} aria-label="Close">×</button>
-              <span className="modal-icon ad-view-icon">◎</span>
-              <p className="kicker">{adViewOnly ? "SHARED AD" : "AD"}</p>
-              <p className="ad-view-domain">{adTarget.domain}</p>
-              <h2 id="ad-title">{adTarget.title}</h2>
-              <div className="ad-view-copy">{adTarget.note}</div>
-              {images.length > 0 ? (
-                <div className="ad-view-gallery">
-                  {images.map((src, imageIndex) => (
-                    <button
-                      key={`${imageIndex}-${src.slice(0, 48)}`}
-                      type="button"
-                      className="ad-view-gallery-item"
-                      onClick={() => setImageGallery({ images, index: imageIndex, title: adTarget.title })}
-                      aria-label={`Open image ${imageIndex + 1} in gallery`}
-                    >
-                      <img src={src} alt={`${adTarget.title} creative ${imageIndex + 1}`} />
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className={`ad-view-placeholder art ${adTarget.palette}`} aria-hidden="true"><span>{adTarget.mark}</span></div>
-              )}
-              <div className="player-actions">
-                {adLink && <a href={adLink} target="_blank" rel="noreferrer">Open link <span>↗</span></a>}
-                {!adViewOnly && <button type="button" onClick={() => { setAdTarget(null); setAdViewOnly(false); startEdit(adTarget); }}>Edit ad</button>}
-                <button type="button" onClick={() => { setAdTarget(null); setAdViewOnly(false); }}>Close</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {imageGallery && (
-        <AdImageGallery
-          images={imageGallery.images}
-          index={imageGallery.index}
-          title={imageGallery.title}
-          onClose={() => setImageGallery(null)}
-          onIndexChange={(index) => setImageGallery((current) => current ? { ...current, index } : current)}
-        />
-      )}
-
       {collectionOpen && <div className="modal-backdrop collection-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setCollectionOpen(false)}>
         <div className="modal collection-modal" role="dialog" aria-modal="true" aria-labelledby="collection-title">
           <button className="close" onClick={() => setCollectionOpen(false)} aria-label="Close">×</button>
@@ -1135,17 +1007,15 @@ export default function Home() {
         </div>
       </div>}
 
-      {loadPreview && <div className="modal-backdrop load-backdrop" onMouseDown={(e) => e.target === e.currentTarget && (setLoadPreview(null), setLoadViewOnly(false))}>
+      {loadPreview && <div className="modal-backdrop load-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setLoadPreview(null)}>
         <div className="modal load-modal" role="dialog" aria-modal="true" aria-labelledby="load-title">
-          <button className="close" onClick={() => { setLoadPreview(null); setLoadViewOnly(false); }} aria-label="Close">×</button>
-          <span className="modal-icon load-icon">◉</span><p className="kicker">{loadViewOnly ? "SHARED LOAD" : "VERIFIED MUTHURLOAD"}</p><h2 id="load-title">{loadPreview.bookmark.title}</h2>
-          <p>{loadViewOnly ? "Read-only view of this shared Load." : "Open without importing, inspect its lineage, then decide whether to Take Load."}</p>
+          <button className="close" onClick={() => setLoadPreview(null)} aria-label="Close">×</button>
+          <span className="modal-icon load-icon">◉</span><p className="kicker">VERIFIED MUTHURLOAD</p><h2 id="load-title">{loadPreview.bookmark.title}</h2>
+          <p>Open without importing, inspect its lineage, then decide whether to Take Load.</p>
           <div className="load-proof"><div><small>ROOT HASH</small><code>{loadPreview.manifest.hashing.root.slice(0, 20)}…</code></div><span>SHA-256 ✓</span></div>
           <dl className="load-meta"><div><dt>Source</dt><dd>{loadPreview.bookmark.domain}</dd></div><div><dt>Format</dt><dd>MUTHURLOAD {loadPreview.manifest.version}</dd></div><div><dt>Compression</dt><dd>ZIP · Deflate 6</dd></div></dl>
           {loadPreview.content && <pre className="load-content">{loadPreview.content.slice(0, 1_600)}</pre>}
-          {loadViewOnly
-            ? <button className="primary wide" onClick={() => { setLoadPreview(null); setLoadViewOnly(false); }}>Close</button>
-            : <button className="primary wide" onClick={takeLoad}>Take Load <span>→</span></button>}
+          <button className="primary wide" onClick={takeLoad}>Take Load <span>→</span></button>
         </div>
       </div>}
 

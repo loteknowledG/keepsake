@@ -5,7 +5,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/favicon.ico", "destination": "/favicon.svg" },
-    { "source": "/player", "destination": "/player.html" }
+    { "source": "/player", "destination": "/player.html" },
+    { "source": "/view", "destination": "/view.html" }
   ],
   "headers": [
     {
